@@ -1,0 +1,15 @@
+# The event log is hash-chained over raw bytes: keep it LF on every checkout.
+*.jsonl text eol=lf
+# Git hooks run under sh: keep them LF on every checkout.
+.githooks/* text eol=lf
+# Analucia files (log, evidence, director files) are LF on every checkout (ORD-0011).
+.analucia/** text eol=lf
+# Images and archives are binary everywhere, including under .analucia/ (ORD-0025: mockups and screenshots).
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.pdf binary
+*.zip binary

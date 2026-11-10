@@ -1,0 +1,355 @@
+<!doctype html>
+<html lang="hi" class="no-js">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>काम AI को सौंपें। फ़ैसले अपने पास रखें।</title>
+<meta name="description" content="एक सरल लूप, जिसमें AI एजेंट आपके लिए बनाते हैं, और आप फ़ैसला करते हैं, सबूत देखते हैं और हस्ताक्षर करते हैं। आपके बिना कुछ भी बंद नहीं होता।">
+<link rel="stylesheet" href="../style.css">
+<link rel="alternate" hreflang="en" href="../index.html">
+<link rel="alternate" hreflang="es" href="../es/index.html">
+<link rel="alternate" hreflang="pt-BR" href="../pt/index.html">
+<link rel="alternate" hreflang="hi" href="index.html">
+<link rel="alternate" hreflang="x-default" href="../index.html">
+<script>
+/* One small inline script (ORD-0026, ORD-0027): progressive enhancement only. No storage, no cookies, no requests. */
+/* WhatsApp (ORD-0027 D): the number with its country code, digits only. Empty: WhatsApp is not shown. */
+var WHATSAPP_NUMBER = '';
+var WA_TEXT = 'नमस्ते, मुझे 30 मिनट के डायग्नोस्टिक के बारे में बात करनी है।';
+var WA_ALWAYS = false; /* Hindi page: only for readers in one of the two time zones checked below */
+document.documentElement.className = 'js';
+document.addEventListener('DOMContentLoaded', function () {
+  var $ = function (s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); };
+  /* B. Copy buttons */
+  $('[data-copy]').forEach(function (b) {
+    b.hidden = false;
+    b.addEventListener('click', function () {
+      var code = document.getElementById(b.getAttribute('data-copy'));
+      var done = function () {
+        var live = document.getElementById('copy-status');
+        b.textContent = 'कॉपी हो गया'; live.textContent = 'कॉपी हो गया: ' + code.textContent;
+        setTimeout(function () { b.textContent = 'कॉपी करें'; }, 2000);
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(code.textContent).then(done, function () { select(code); });
+      } else { select(code); }
+    });
+  });
+  /* ORD-0027 A. Copy the contact address */
+  $('[data-copy-email]').forEach(function (b) {
+    b.hidden = false;
+    b.addEventListener('click', function () {
+      var addr = document.getElementById(b.getAttribute('data-copy-email'));
+      var done = function () {
+        b.textContent = 'कॉपी हो गया'; document.getElementById('copy-status').textContent = 'कॉपी हो गया: ' + addr.textContent;
+        setTimeout(function () { b.textContent = 'ईमेल कॉपी करें'; }, 2000);
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(addr.textContent).then(done, function () { select(addr); });
+      } else { select(addr); }
+    });
+  });
+  /* ORD-0027 D. WhatsApp link, only when a number is set (and, here, only for the two time zones checked below) */
+  var wa = WHATSAPP_NUMBER.replace(/\D/g, ''), tz = '';
+  try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch (e) { tz = ''; }
+  if (wa && (WA_ALWAYS || tz === 'Asia/Kolkata' || tz === 'Asia/Calcutta')) {
+    $('[data-contact]').forEach(function (box) {
+      var a = document.createElement('a');
+      a.className = 'btn o'; a.target = '_blank'; a.rel = 'noopener';
+      a.href = 'https://wa.me/' + wa + '?text=' + encodeURIComponent(WA_TEXT);
+      a.textContent = 'WhatsApp पर बात करें';
+      box.appendChild(a);
+    });
+  }
+  function select(el) { var r = document.createRange(); r.selectNodeContents(el); var s = getSelection(); s.removeAllRanges(); s.addRange(r); }
+  /* C. Loop steps open their example */
+  $('.step-toggle').forEach(function (t) {
+    var ex = document.getElementById(t.getAttribute('aria-controls'));
+    t.setAttribute('aria-expanded', 'false'); ex.hidden = true;
+    t.addEventListener('click', function () {
+      var open = t.getAttribute('aria-expanded') !== 'true';
+      t.setAttribute('aria-expanded', String(open)); ex.hidden = !open;
+    });
+  });
+  /* D. The nav link of the section in view */
+  if ('IntersectionObserver' in window) {
+    var links = $('.nav ul a[href^="#"]');
+    var io = new IntersectionObserver(function (es) {
+      es.forEach(function (e) {
+        if (!e.isIntersecting) return;
+        links.forEach(function (a) {
+          var on = a.getAttribute('href') === '#' + e.target.getAttribute('data-nav');
+          a.classList.toggle('is-active', on);
+          if (on) a.setAttribute('aria-current', 'true'); else a.removeAttribute('aria-current');
+        });
+      });
+    }, { rootMargin: '-45% 0px -50% 0px' });
+    $('[data-nav]').forEach(function (s) { io.observe(s); });
+  }
+  /* H. The loop diagram: highlight a step, filter by who acts */
+  var info = document.getElementById('flow-info');
+  var show = function (id) {
+    $('[data-step]').forEach(function (n) { n.classList.toggle('is-on', n.getAttribute('data-step') === id); });
+    var li = document.querySelector('#flow-list [data-step="' + id + '"]');
+    if (li) info.textContent = li.textContent;
+  };
+  $('.flow [data-step]').forEach(function (g) {
+    g.setAttribute('tabindex', '0'); g.setAttribute('role', 'button');
+    var id = g.getAttribute('data-step');
+    g.addEventListener('mouseenter', function () { show(id); });
+    g.addEventListener('focus', function () { show(id); });
+    g.addEventListener('click', function () { show(id); });
+  });
+  $('[data-filter]').forEach(function (b) {
+    b.hidden = false;
+    b.addEventListener('click', function () {
+      var who = b.getAttribute('data-filter');
+      $('[data-filter]').forEach(function (x) { x.setAttribute('aria-pressed', String(x === b)); });
+      $('[data-actor]').forEach(function (n) { n.classList.toggle('is-dim', who !== 'all' && n.getAttribute('data-actor') !== who); });
+    });
+  });
+});
+</script>
+</head>
+<body>
+<a class="skip" href="#main">सामग्री पर जाएँ</a>
+<header class="topbar">
+  <div class="wrap nav">
+    <a class="logo" href="#top"><span class="name"></span></a>
+    <nav aria-label="खंड">
+      <ul>
+        <li><a href="#how">यह कैसे काम करता है</a></li>
+        <li><a href="#see">आपको क्या दिखता है</a></li>
+        <li><a href="#start">शुरू करें</a></li>
+        <li><a href="#pricing">कीमतें</a></li>
+        <li><a href="#talk">हमसे बात करें</a></li>
+      </ul>
+    </nav>
+    <nav class="langs" aria-label="भाषा">
+      <ul>
+        <li><a href="../index.html" hreflang="en" lang="en">English</a></li>
+        <li><a href="../es/index.html" hreflang="es" lang="es">Español</a></li>
+        <li><a href="../pt/index.html" hreflang="pt-BR" lang="pt-BR">Português</a></li>
+        <li><a href="index.html" hreflang="hi" lang="hi" aria-current="page">हिन्दी</a></li>
+      </ul>
+    </nav>
+    <a class="btn btn-sm cta-top" href="mailto:hello@analuciaaos.com?subject=30-minute%20diagnostic">30 मिनट का डायग्नोस्टिक बुक करें</a>
+  </div>
+</header>
+<p class="wrap transnote" id="translation-note" role="note"><span>अनुवाद की समीक्षा चल रही है: एक मूल भाषी पाठक इसे अभी जाँचेगा।</span></p>
+
+<main id="main">
+  <section class="view hero" id="top" data-nav="top" aria-labelledby="h-top">
+    <div class="wrap">
+      <p class="tag">AI एजेंटों के लिए एक ऑपरेटिंग सिस्टम</p>
+      <h1 id="h-top">काम AI को सौंपें।<br><em>फ़ैसले अपने पास रखें।</em></h1>
+      <p class="lead">एक सरल लूप, जिसमें एजेंट आपके लिए बनाते हैं, और आप फ़ैसला करते हैं, सबूत देखते हैं और हस्ताक्षर करते हैं। कोई कोड पढ़ने की ज़रूरत नहीं। आपके बिना कुछ भी बंद नहीं होता।</p>
+      <ul class="pills" aria-label="संक्षेप में">
+        <li>मालिक फ़ैसला करता है</li>
+        <li>एजेंट बनाता है</li>
+        <li>वादे नहीं, सबूत</li>
+        <li>Claude Code के साथ काम करता है</li>
+      </ul>
+      <div class="actions" data-contact>
+        <a class="btn" href="#loop">देखें कि लूप कैसे काम करता है</a>
+        <a class="btn o" href="mailto:hello@analuciaaos.com?subject=30-minute%20diagnostic">30 मिनट का डायग्नोस्टिक बुक करें</a>
+        <span class="mailcopy"><span class="addr" id="addr-top">hello@analuciaaos.com</span> <button type="button" class="copy" data-copy-email="addr-top" hidden>ईमेल कॉपी करें</button></span>
+      </div>
+      <p class="note"><span>मुफ़्त कोर · जाँच के लिए खुला</span><span aria-hidden="true">नीचे देखें ↓</span></p>
+    </div>
+  </section>
+
+  <section class="view" id="how" data-nav="how" aria-labelledby="h-how">
+    <div class="wrap">
+      <p class="tag">01 · विचार</p>
+      <h2 id="h-how">तीन भूमिकाएँ। <em>उनमें से एक आप हैं।</em></h2>
+      <p class="lead">AI एजेंट तेज़ होते हैं और कभी-कभी ग़लत भी। लूप हर पक्ष को एक ही काम देता है, ताकि रफ़्तार कभी समझदारी की जगह न ले।</p>
+      <ul class="cards">
+        <li class="card"><p class="n">मालिक · आप</p><h3>फ़ैसला और हस्ताक्षर</h3><p>लक्ष्य तय करता है, ज़रूरी चीज़ों को मंज़ूरी देता है, और जोखिम वाले काम को सिर्फ़ वही बंद कर सकता है।</p></li>
+        <li class="card"><p class="n">डायरेक्टर</p><h3>योजना और जाँच</h3><p>आपके इरादे को छोटे, सीमित ऑर्डरों में बदलता है और नतीजे को किसी सारांश से नहीं, डिस्क से मिलाकर जाँचता है।</p></li>
+        <li class="card"><p class="n">एक्ज़ीक्यूटर</p><h3>तय दायरे में निर्माण</h3><p>कोडिंग एजेंट सीमाओं के भीतर काम करता है: एक बजट, एक दायरा, और ऐसी फ़ाइलें जिन्हें छूने की उसे अनुमति नहीं है।</p></li>
+      </ul>
+      <p class="band"><strong>लूप का नियम:</strong>एजेंट प्रस्ताव दे सकता है और बना सकता है। मंज़ूरी देना और बंद करना सिर्फ़ मालिक के हाथ में है।</p>
+    </div>
+  </section>
+
+  <section class="view" id="loop" data-nav="how" aria-labelledby="h-loop">
+    <div class="wrap">
+      <p class="tag">02 · लूप</p>
+      <h2 id="h-loop">छह चरण। <em>हर चरण एक निशान छोड़ता है।</em></h2>
+      <ol class="steps">
+        <li><p class="k">चरण 1</p><h3><button class="step-toggle" type="button" aria-controls="ex-1" aria-expanded="true">इरादा</button></h3><p>आप अपने शब्दों में बताते हैं कि आप क्या चाहते हैं।</p><p class="example" id="ex-1">उदाहरण के लिए, आप लिखते हैं “एक संपर्क पेज जोड़ो”। अभी आपसे और कुछ नहीं चाहिए।</p></li>
+        <li><p class="k">चरण 2</p><h3><button class="step-toggle" type="button" aria-controls="ex-2" aria-expanded="true">ऑर्डर</button></h3><p>डायरेक्टर एक बजट के साथ एक छोटा, सीमित ऑर्डर लिखता है।</p><p class="example" id="ex-2">ऑर्डर में मिनटों और प्रयासों में उसका बजट, उसका जोखिम स्तर और वे जाँचें लिखी होती हैं जो साबित करेंगी कि काम पूरा हुआ।</p></li>
+        <li><p class="k">चरण 3</p><h3><button class="step-toggle" type="button" aria-controls="ex-3" aria-expanded="true">निर्माण</button></h3><p>एक्ज़ीक्यूटर उस ऑर्डर की सीमाओं के भीतर काम करता है।</p><p class="example" id="ex-3">अगर एजेंट किसी ऑर्डर या उसकी जाँचों को बदलने की कोशिश करता है, तो टूल बदलाव होने से पहले ही उसे रोक देता है, बशर्ते प्लगइन प्रोजेक्ट फ़ोल्डर में सक्रिय हो।</p></li>
+        <li><p class="k">चरण 4</p><h3><button class="step-toggle" type="button" aria-controls="ex-4" aria-expanded="true">जाँच</button></h3><p>स्वचालित जाँचें चलती हैं। कोई भी अपने काम को खुद नंबर नहीं देता।</p><p class="example" id="ex-4">जाँचें डायरेक्टर ने लिखी हैं, एजेंट ने नहीं; ऊँचे जोखिम वाला ऑर्डर उन्हें दो बार चलाता है।</p></li>
+        <li><p class="k">चरण 5</p><h3><button class="step-toggle" type="button" aria-controls="ex-5" aria-expanded="true">सबूत</button></h3><p>नतीजे फ़ाइलों के रूप में सहेजे जाते हैं, जिन्हें आप खोल सकते हैं।</p><p class="example" id="ex-5">रिपोर्ट हर जाँच का मूल आउटपुट, उसके अपने ऑर्डर के साथ रखती है।</p></li>
+        <li><p class="k">चरण 6</p><h3><button class="step-toggle" type="button" aria-controls="ex-6" aria-expanded="true">आपके हस्ताक्षर</button></h3><p>आप इसे बंद करते हैं, या एक नोट के साथ वापस भेजते हैं।</p><p class="example" id="ex-6">पास हुए काम के लिए आप CLOSE टाइप करते हैं, या किसी दस्तावेज़ पर टिप्पणी करते हैं; आपका नोट एजेंट तक पहुँचता है।</p></li>
+      </ol>
+      <p class="band"><strong>छेड़छाड़ पकड़ने वाला लॉग।</strong>हर चरण एक-दूसरे से जुड़े रिकॉर्ड में लिखा जाता है। अगर कोई पिछली बातें बदलता है, तो कड़ी टूट जाती है और टूल आपको बता देता है।</p>
+      <ul class="cards small">
+        <li class="card"><p><strong>काम रुक गया?</strong> जहाँ रुका था वहीं से आगे बढ़ें; टूल दिखाता है कि क्या अधूरा रह गया।</p></li>
+        <li class="card"><p><strong>बहुत जोखिम?</strong> ज़्यादा जोखिम वाले ऑर्डरों के लिए आपकी टाइप की हुई पुष्टि चाहिए।</p></li>
+        <li class="card"><p><strong>लैपटॉप खो गया?</strong> प्रोजेक्ट रिपॉज़िटरी से फिर से बन जाता है।</p></li>
+      </ul>
+
+      <figure class="panel" aria-labelledby="flow-title">
+        <figcaption><span class="kicker" id="flow-title">एक नज़र में लूप · कौन क्या करता है</span></figcaption>
+        <div class="filters" role="group" aria-label="काम करने वाले के हिसाब से चरण दिखाएँ">
+          <button type="button" data-filter="all" aria-pressed="true" hidden>सभी</button>
+          <button type="button" data-filter="person" aria-pressed="false" hidden>व्यक्ति</button>
+          <button type="button" data-filter="auto" aria-pressed="false" hidden>स्वचालित</button>
+          <button type="button" data-filter="gate" aria-pressed="false" hidden>गेट</button>
+          <button type="button" data-filter="deliverable" aria-pressed="false" hidden>परिणाम</button>
+        </div>
+        <div class="flow-scroll">
+          <svg class="flow" viewBox="0 0 1220 300" role="img" aria-labelledby="flow-svg-t flow-svg-d" focusable="false">
+            <title id="flow-svg-t">लूप का प्रवाह</title>
+            <desc id="flow-svg-d">ऑर्डर, स्वीकृति, निर्माण, जाँच, डिलीवरी, हस्ताक्षर, और निरंतर सुधार के लिए हस्ताक्षर से ऑर्डर तक लौटती एक डैश वाली रेखा।</desc>
+            <defs><marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0 0L10 5L0 10z" class="ar"/></marker></defs>
+            <g class="edges">
+              <path d="M200 110H232"/><path d="M372 110H404"/><path d="M544 110H578"/><path d="M712 110H746"/><path d="M886 110H918"/>
+              <path class="loopback" d="M1015 152V240H128V158"/>
+            </g>
+            <g data-step="order" data-actor="person"><rect class="n person" x="56" y="70" width="144" height="80" rx="40"/><text x="128" y="104" class="t">1 · ऑर्डर</text><text x="128" y="126" class="s">आप तय करते हैं</text></g>
+            <g data-step="admit" data-actor="auto"><rect class="n auto" x="232" y="70" width="140" height="80" rx="10"/><text x="302" y="104" class="t">2 · स्वीकृति</text><text x="302" y="126" class="s">aos admit</text></g>
+            <g data-step="build" data-actor="auto"><rect class="n auto" x="404" y="70" width="140" height="80" rx="10"/><text x="474" y="104" class="t">3 · निर्माण</text><text x="474" y="126" class="s">Claude Code</text></g>
+            <g data-step="verify" data-actor="gate"><path class="n gate" d="M645 50L712 110L645 170L578 110z"/><text x="645" y="106" class="t">4 · जाँच</text><text x="645" y="126" class="s">पास या नहीं?</text></g>
+            <g data-step="deliver" data-actor="deliverable"><rect class="n deliverable" x="746" y="70" width="140" height="80" rx="10"/><text x="816" y="104" class="t">5 · डिलीवरी</text><text x="816" y="126" class="s">सबूत + सारांश</text></g>
+            <g data-step="sign" data-actor="person"><rect class="n person" x="918" y="70" width="194" height="80" rx="40"/><text x="1015" y="104" class="t">6 · हस्ताक्षर</text><text x="1015" y="126" class="s">आप CLOSE टाइप करते हैं</text></g>
+            <text x="572" y="266" class="s improve">निरंतर सुधार: जो सीखा, वह एक परिशिष्ट बनकर वापस आता है</text>
+          </svg>
+        </div>
+        <ul class="legend" aria-label="संकेत">
+          <li><i class="sw person"></i>व्यक्ति (फ़ैसला और हस्ताक्षर)</li>
+          <li><i class="sw auto"></i>स्वचालित (aos)</li>
+          <li><i class="sw gate"></i>गेट (पास / पास नहीं)</li>
+          <li><i class="sw deliverable"></i>परिणाम</li>
+          <li><i class="sw improve"></i>निरंतर सुधार</li>
+        </ul>
+        <p class="flow-info" id="flow-info" aria-live="polite">किसी चरण पर पॉइंटर ले जाएँ या टैप करें, और देखें कि क्या होता है और कौन करता है।</p>
+        <ol class="flow-list" id="flow-list">
+          <li data-step="order" data-actor="person"><strong>ऑर्डर</strong> — आप तय करते हैं कि आपको क्या चाहिए; डायरेक्टर उसे लिख लेता है। <em>कौन करता है: आप।</em></li>
+          <li data-step="admit" data-actor="auto"><strong>स्वीकृति</strong> — aos admit ऑर्डर दर्ज करता है और उसे कतार में रखता है। <em>कौन करता है: टूल।</em></li>
+          <li data-step="build" data-actor="auto"><strong>निर्माण</strong> — कोडिंग एजेंट ऑर्डर की सीमाओं के भीतर काम करता है। <em>कौन करता है: एजेंट।</em></li>
+          <li data-step="verify" data-actor="gate"><strong>जाँच</strong> — जाँचें चलती हैं; काम पास होता है या वापस जाता है। <em>कौन करता है: टूल, एक गेट की तरह।</em></li>
+          <li data-step="deliver" data-actor="deliverable"><strong>डिलीवरी</strong> — सबूत और एक सारांश आपके लिए सहेजे जाते हैं। <em>नतीजा: फ़ाइलें, जिन्हें आप खोल सकते हैं।</em></li>
+          <li data-step="sign" data-actor="person"><strong>हस्ताक्षर</strong> — आप इसे बंद करते हैं, या एक नोट के साथ वापस भेजते हैं। <em>कौन करता है: आप।</em></li>
+        </ol>
+      </figure>
+    </div>
+  </section>
+
+  <section class="view" id="see" data-nav="see" aria-labelledby="h-see">
+    <div class="wrap">
+      <p class="tag">03 · आपको क्या दिखता है</p>
+      <h2 id="h-see">फ़ैसले के लिए एक स्क्रीन। <em>सीधे शब्द।</em></h2>
+      <div class="two">
+        <pre class="term" aria-label="टर्मिनल में हस्ताक्षर वाली स्क्रीन का उदाहरण"><span class="d">$ aos sign</span>
+<span class="g">1 document(s) waiting for your review.</span>
+<span class="d">──────────────────────────────</span>
+Document: Hosting options for the new app (order ORD-0018)
+<span class="d">  in short: one page, version 2</span>
+
+<span class="y">approve</span> · <span class="y">comment</span> · <span class="y">reject</span> · open
+&gt; comment
+  Your comment (what should change): the cost does not include the domain.
+<span class="g">  Comment recorded: the agent will see it.</span></pre>
+        <div class="doc">
+          <p class="kicker">फ़ैसले का सार · एक पेज</p>
+          <h3>ऐप कहाँ चलना चाहिए?</h3>
+          <p>पहले ग्राहकों के लिए एक जगह चुनें। हर विकल्प अपनी मासिक लागत बताता है, और यह भी कि चाबियाँ किसके पास रहती हैं।</p>
+          <table>
+            <caption class="kicker">केवल उदाहरण: इस पेज पर कोई लागत नहीं दिखाई गई है।</caption>
+            <thead><tr><th scope="col">विकल्प</th><th scope="col">मासिक लागत</th><th scope="col">कौन चलाता है</th></tr></thead>
+            <tbody>
+              <tr class="rec"><td><strong>मैनेज्ड प्लेटफ़ॉर्म</strong> <span aria-label="सुझाया गया">✓</span></td><td>सार में, तारीख के साथ</td><td>प्रदाता</td></tr>
+              <tr><td>आपका अपना सर्वर</td><td>सार में, तारीख के साथ</td><td>आप</td></tr>
+            </tbody>
+          </table>
+          <p><strong>आपसे हमें चाहिए:</strong> एक विकल्प चुनें।</p>
+          <ul class="choices" aria-label="आपके विकल्प"><li class="a">मंज़ूर करें</li><li>टिप्पणी करें</li><li>अस्वीकार करें</li></ul>
+        </div>
+      </div>
+
+      <figure class="panel orders" aria-labelledby="orders-title">
+        <figcaption><span class="kicker" id="orders-title">ऑर्डर पैनल · उदाहरण</span></figcaption>
+        <div class="table-scroll">
+          <table class="orders-table">
+            <thead><tr><th scope="col">ऑर्डर</th><th scope="col">लक्ष्य</th><th scope="col">स्थिति</th><th scope="col">जाँच</th><th scope="col">हस्ताक्षर</th></tr></thead>
+            <tbody>
+              <tr><td>ORD-0001</td><td>प्रोजेक्ट की संरचना</td><td><span class="st closed">बंद</span></td><td>सभी जाँचें पास</td><td>आपने हस्ताक्षर किए</td></tr>
+              <tr><td>ORD-0002</td><td>होम स्क्रीन</td><td><span class="st delivered">डिलीवर</span></td><td>सभी जाँचें पास</td><td>आपकी प्रतीक्षा में</td></tr>
+              <tr><td>ORD-0003</td><td>संपर्क पेज</td><td><span class="st running">चल रहा है</span></td><td>—</td><td>—</td></tr>
+              <tr><td>ORD-0004</td><td>साइन-अप प्रक्रिया</td><td><span class="st blocked">रुका हुआ</span></td><td>आपके फ़ैसले की ज़रूरत</td><td>—</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="chain" aria-label="घटनाओं की कड़ी (उदाहरण)">
+          <ol><li>घटना</li><li>घटना</li><li>घटना</li><li>घटना</li></ol>
+          <span class="intact">कड़ी सुरक्षित ✓</span>
+        </div>
+      </figure>
+      <p class="note"><span>उदाहरण के लिए स्क्रीन · उदाहरण ऑर्डर</span></p>
+    </div>
+  </section>
+
+  <section class="view" id="start" data-nav="start" aria-labelledby="h-start">
+    <div class="wrap">
+      <p class="tag">04 · शुरू करें</p>
+      <h2 id="h-start">चार चरण। <em>फिर आपका पहला घंटा।</em></h2>
+      <div class="two" style="align-items:start">
+        <div>
+          <div class="before" aria-labelledby="h-before">
+            <h3 id="h-before">शुरू करने से पहले</h3>
+            <p>अगर आप सिर्फ़ ये इंस्टॉल करते हैं, तो लगभग 10 से 15 मिनट।</p>
+            <ul>
+              <li><strong>Git</strong>, वह प्रोग्राम जो प्रोजेक्ट का इतिहास रखता है। जाँचें: <code id="c-git">git --version</code> <button type="button" class="copy" data-copy="c-git" hidden>कॉपी करें</button></li>
+              <li><strong>Node.js LTS</strong>, एक मुफ़्त प्रोग्राम जिसे लूप अंदर से इस्तेमाल करता है; इसे एक बार इंस्टॉल करना होता है। nodejs.org पर, Windows में “Windows Installer (.msi)” बटन चुनें और डिफ़ॉल्ट विकल्प स्वीकार करें; macOS पर macOS इंस्टॉलर इस्तेमाल करें, और Linux पर अपने सिस्टम का पैकेज या पहले से तैयार डाउनलोड। जाँचें: <code id="c-node">node --version</code> <button type="button" class="copy" data-copy="c-node" hidden>कॉपी करें</button></li>
+              <li><strong>Claude Code</strong>, जिसमें आपने साइन इन किया हो।</li>
+              <li><strong>Claude डेस्कटॉप ऐप</strong>, सिर्फ़ तभी जब आप किसी जुड़े हुए फ़ोल्डर के साथ चैट चाहते हों।</li>
+              <li><strong>एक खाली प्रोजेक्ट फ़ोल्डर।</strong></li>
+            </ul>
+            <p class="small">आपको Chocolatey, Visual Studio, Python या Docker की ज़रूरत नहीं है।</p>
+          </div>
+          <ol class="start">
+            <li><div>प्लगइन जोड़ें<span class="cmd"><code id="c-add">claude plugin marketplace add AnaluciaAOS/analucia-aos</code><button type="button" class="copy" data-copy="c-add" hidden>कॉपी करें</button></span></div></li>
+            <li><div>इसे इंस्टॉल करें<span class="cmd"><code id="c-install">claude plugin install analucia@analucia-aos --scope project</code><button type="button" class="copy" data-copy="c-install" hidden>कॉपी करें</button></span></div></li>
+            <li><div>उसी फ़ोल्डर में Claude Code खोलें<span class="hint">किसी सब-फ़ोल्डर में नहीं: प्लगइन अपनी सुरक्षा जाँचें सिर्फ़ उसी फ़ोल्डर में लोड करता है जहाँ उसे इंस्टॉल किया गया था। जो फ़ोल्डर अभी सेट अप नहीं हुआ है, उसमें पहला संदेश बताता है कि प्लगइन इंस्टॉल है और फ़ोल्डर सेट अप नहीं है, और चलाने के लिए सटीक aos init कमांड देता है। “Status:” सिर्फ़ उस फ़ोल्डर में दिखता है जो पहले से सेट अप है।</span></div></li>
+            <li><div>सेटअप के सवालों के जवाब दें<span class="hint">aos init 3 हिस्सों में 15 बंद सवाल पूछता है, साथ में आपकी प्रगति और बचा हुआ समय: लगभग 5 मिनट। पहला सवाल भाषा चुनता है। आख़िर में एक सारांश आता है, और जब तक आप CONFIRM टाइप नहीं करते, कुछ भी नहीं लिखा जाता।</span></div></li>
+          </ol>
+          <p class="sr-only" id="copy-status" aria-live="polite"></p>
+          <div class="actions" data-contact style="margin-top:30px"><a class="btn" href="mailto:hello@analuciaaos.com?subject=30-minute%20diagnostic">30 मिनट का डायग्नोस्टिक बुक करें</a>
+            <span class="mailcopy"><span class="addr" id="addr-start">hello@analuciaaos.com</span> <button type="button" class="copy" data-copy-email="addr-start" hidden>ईमेल कॉपी करें</button></span></div>
+        </div>
+        <aside class="lim" id="talk" data-nav="talk" aria-labelledby="h-lim">
+          <h3 id="h-lim">ईमानदार सीमाएँ</h3>
+          <p>यह आपकी रणनीति नहीं लिखता, और किसी कमज़ोर विचार को अच्छा नहीं बनाता। असली ग्राहकों तक पहुँचने वाले काम की समीक्षा की जगह यह नहीं लेता। आज इसके लिए Claude Code चाहिए। कीमतें अभी तय नहीं हैं; कोर मुफ़्त में इस्तेमाल किया जा सकता है।</p>
+          <p class="contact">सवाल? <a href="mailto:hello@analuciaaos.com">hello@analuciaaos.com</a></p>
+        </aside>
+      </div>
+    </div>
+  </section>
+  <section class="view" id="pricing" data-nav="pricing" aria-labelledby="h-pricing">
+    <div class="wrap">
+      <p class="tag">05 · कीमतें</p>
+      <h2 id="h-pricing">कीमतें, साफ़ शब्दों में। <em>कोर मुफ़्त है।</em></h2>
+      <ul class="cards pricing">
+        <li class="card"><p class="n">मुफ़्त</p><h3>कोर</h3><p>भूमिकाएँ, ऑर्डर, सबूत और हस्ताक्षर। यह आपकी अपनी मशीन पर चलता है और जाँच के लिए खुला है।</p><a class="btn" href="#start">इसे इंस्टॉल करें</a></li>
+        <li class="card"><p class="n">जल्द आ रहा है</p><h3>ऑनलाइन सेवाएँ</h3><p>एक बोर्ड, एक ऑनलाइन शीट और प्रीमियम मॉड्यूल, प्रोजेक्ट द्वारा चलाए जाने वाले सर्वर पर। कुछ भी चार्ज करने से पहले कीमत प्रकाशित की जाती है।</p><a class="btn o" href="mailto:hello@analuciaaos.com?subject=Online%20services">खुलने पर मुझे बताएँ</a></li>
+        <li class="card"><p class="n">कॉल</p><h3>शुरुआती सेटअप</h3><p>आपके पहले प्रोजेक्ट को आपके साथ सेट अप करने के लिए एक कॉल।</p><a class="btn o" href="mailto:hello@analuciaaos.com?subject=30-minute%20diagnostic">30 मिनट का डायग्नोस्टिक बुक करें</a></li>
+      </ul>
+      <p class="note"><span>शुरू करने के लिए कार्ड की ज़रूरत नहीं।</span><span>आपके देखे बिना कुछ भी चार्ज नहीं होता।</span></p>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>© 2026 <span class="name"></span></span>
+    <span><a href="../privacy.html" hreflang="en">गोपनीयता (अंग्रेज़ी में)</a> · कोई कुकी नहीं, दूसरी साइटों से कुछ भी लोड नहीं होता</span>
+  </div>
+</footer>
+
+<div class="cta-bar"><a class="btn" href="mailto:hello@analuciaaos.com?subject=30-minute%20diagnostic">30 मिनट का डायग्नोस्टिक बुक करें</a></div>
+</body>
+</html>

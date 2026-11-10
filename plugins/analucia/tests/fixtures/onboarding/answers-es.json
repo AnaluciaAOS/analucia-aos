@@ -1,0 +1,22 @@
+{
+  "locale": "es",
+  "answers": {
+    "purpose": "Analucia AOS: el sistema que gobierna el trabajo de los agentes con órdenes, evidencia y un registro inmutable",
+    "in_use": "no",
+    "end_user_input": "unknown",
+    "how_verified": "tests",
+    "never_leaves": [],
+    "delivered_when": "unknown",
+    "wip_limit": 1,
+    "external_artifacts": [],
+    "github_owner": "example",
+    "cloud_sessions": "unknown",
+    "executor_tool": "claude-code",
+    "approve_from": "sheet",
+    "owner_locale": "es",
+    "deploy_target": "none",
+    "domain": "",
+    "budget_monthly_usd": "unknown",
+    "risk_default": "medium"
+  }
+}

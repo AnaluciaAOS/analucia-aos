@@ -1,0 +1,355 @@
+<!doctype html>
+<html lang="pt-BR" class="no-js">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Entregue o trabalho à IA. Fique com as decisões.</title>
+<meta name="description" content="Um ciclo simples que deixa agentes de IA construírem para você, enquanto você decide, vê as evidências e assina. Nada é fechado sem você.">
+<link rel="stylesheet" href="../style.css">
+<link rel="alternate" hreflang="en" href="../index.html">
+<link rel="alternate" hreflang="es" href="../es/index.html">
+<link rel="alternate" hreflang="pt-BR" href="index.html">
+<link rel="alternate" hreflang="hi" href="../hi/index.html">
+<link rel="alternate" hreflang="x-default" href="../index.html">
+<script>
+/* One small inline script (ORD-0026, ORD-0027): progressive enhancement only. No storage, no cookies, no requests. */
+/* WhatsApp (ORD-0027 D): the number with its country code, digits only. Empty: WhatsApp is not shown. */
+var WHATSAPP_NUMBER = '';
+var WA_TEXT = 'Olá, gostaria de conversar sobre um diagnóstico de 30 minutos.';
+var WA_ALWAYS = true; /* Portuguese page: shown to every reader once a number is set */
+document.documentElement.className = 'js';
+document.addEventListener('DOMContentLoaded', function () {
+  var $ = function (s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); };
+  /* B. Copy buttons */
+  $('[data-copy]').forEach(function (b) {
+    b.hidden = false;
+    b.addEventListener('click', function () {
+      var code = document.getElementById(b.getAttribute('data-copy'));
+      var done = function () {
+        var live = document.getElementById('copy-status');
+        b.textContent = 'Copiado'; live.textContent = 'Copiado: ' + code.textContent;
+        setTimeout(function () { b.textContent = 'Copiar'; }, 2000);
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(code.textContent).then(done, function () { select(code); });
+      } else { select(code); }
+    });
+  });
+  /* ORD-0027 A. Copy the contact address */
+  $('[data-copy-email]').forEach(function (b) {
+    b.hidden = false;
+    b.addEventListener('click', function () {
+      var addr = document.getElementById(b.getAttribute('data-copy-email'));
+      var done = function () {
+        b.textContent = 'Copiado'; document.getElementById('copy-status').textContent = 'Copiado: ' + addr.textContent;
+        setTimeout(function () { b.textContent = 'Copiar e-mail'; }, 2000);
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(addr.textContent).then(done, function () { select(addr); });
+      } else { select(addr); }
+    });
+  });
+  /* ORD-0027 D. WhatsApp link, only when a number is set (and, here, only for the two time zones checked below) */
+  var wa = WHATSAPP_NUMBER.replace(/\D/g, ''), tz = '';
+  try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch (e) { tz = ''; }
+  if (wa && (WA_ALWAYS || tz === 'Asia/Kolkata' || tz === 'Asia/Calcutta')) {
+    $('[data-contact]').forEach(function (box) {
+      var a = document.createElement('a');
+      a.className = 'btn o'; a.target = '_blank'; a.rel = 'noopener';
+      a.href = 'https://wa.me/' + wa + '?text=' + encodeURIComponent(WA_TEXT);
+      a.textContent = 'Falar no WhatsApp';
+      box.appendChild(a);
+    });
+  }
+  function select(el) { var r = document.createRange(); r.selectNodeContents(el); var s = getSelection(); s.removeAllRanges(); s.addRange(r); }
+  /* C. Loop steps open their example */
+  $('.step-toggle').forEach(function (t) {
+    var ex = document.getElementById(t.getAttribute('aria-controls'));
+    t.setAttribute('aria-expanded', 'false'); ex.hidden = true;
+    t.addEventListener('click', function () {
+      var open = t.getAttribute('aria-expanded') !== 'true';
+      t.setAttribute('aria-expanded', String(open)); ex.hidden = !open;
+    });
+  });
+  /* D. The nav link of the section in view */
+  if ('IntersectionObserver' in window) {
+    var links = $('.nav ul a[href^="#"]');
+    var io = new IntersectionObserver(function (es) {
+      es.forEach(function (e) {
+        if (!e.isIntersecting) return;
+        links.forEach(function (a) {
+          var on = a.getAttribute('href') === '#' + e.target.getAttribute('data-nav');
+          a.classList.toggle('is-active', on);
+          if (on) a.setAttribute('aria-current', 'true'); else a.removeAttribute('aria-current');
+        });
+      });
+    }, { rootMargin: '-45% 0px -50% 0px' });
+    $('[data-nav]').forEach(function (s) { io.observe(s); });
+  }
+  /* H. The loop diagram: highlight a step, filter by who acts */
+  var info = document.getElementById('flow-info');
+  var show = function (id) {
+    $('[data-step]').forEach(function (n) { n.classList.toggle('is-on', n.getAttribute('data-step') === id); });
+    var li = document.querySelector('#flow-list [data-step="' + id + '"]');
+    if (li) info.textContent = li.textContent;
+  };
+  $('.flow [data-step]').forEach(function (g) {
+    g.setAttribute('tabindex', '0'); g.setAttribute('role', 'button');
+    var id = g.getAttribute('data-step');
+    g.addEventListener('mouseenter', function () { show(id); });
+    g.addEventListener('focus', function () { show(id); });
+    g.addEventListener('click', function () { show(id); });
+  });
+  $('[data-filter]').forEach(function (b) {
+    b.hidden = false;
+    b.addEventListener('click', function () {
+      var who = b.getAttribute('data-filter');
+      $('[data-filter]').forEach(function (x) { x.setAttribute('aria-pressed', String(x === b)); });
+      $('[data-actor]').forEach(function (n) { n.classList.toggle('is-dim', who !== 'all' && n.getAttribute('data-actor') !== who); });
+    });
+  });
+});
+</script>
+</head>
+<body>
+<a class="skip" href="#main">Pular para o conteúdo</a>
+<header class="topbar">
+  <div class="wrap nav">
+    <a class="logo" href="#top"><span class="name"></span></a>
+    <nav aria-label="Seções">
+      <ul>
+        <li><a href="#how">Como funciona</a></li>
+        <li><a href="#see">O que você vê</a></li>
+        <li><a href="#start">Começar</a></li>
+        <li><a href="#pricing">Preços</a></li>
+        <li><a href="#talk">Fale conosco</a></li>
+      </ul>
+    </nav>
+    <nav class="langs" aria-label="Idioma">
+      <ul>
+        <li><a href="../index.html" hreflang="en" lang="en">English</a></li>
+        <li><a href="../es/index.html" hreflang="es" lang="es">Español</a></li>
+        <li><a href="index.html" hreflang="pt-BR" lang="pt-BR" aria-current="page">Português</a></li>
+        <li><a href="../hi/index.html" hreflang="hi" lang="hi">हिन्दी</a></li>
+      </ul>
+    </nav>
+    <a class="btn btn-sm cta-top" href="mailto:hello@analuciaaos.com?subject=30-minute%20diagnostic">Agende um diagnóstico de 30 minutos</a>
+  </div>
+</header>
+<p class="wrap transnote" id="translation-note" role="note"><span>Tradução em revisão: um leitor nativo ainda vai revisá-la.</span></p>
+
+<main id="main">
+  <section class="view hero" id="top" data-nav="top" aria-labelledby="h-top">
+    <div class="wrap">
+      <p class="tag">Um sistema operacional para agentes de IA</p>
+      <h1 id="h-top">Entregue o trabalho à IA.<br><em>Fique com as decisões.</em></h1>
+      <p class="lead">Um ciclo simples que deixa os agentes construírem para você, enquanto você decide, vê as evidências e assina. Nenhum código para ler. Nada é fechado sem você.</p>
+      <ul class="pills" aria-label="Em resumo">
+        <li>O dono decide</li>
+        <li>O agente constrói</li>
+        <li>Evidências, não promessas</li>
+        <li>Funciona com o Claude Code</li>
+      </ul>
+      <div class="actions" data-contact>
+        <a class="btn" href="#loop">Veja como o ciclo funciona</a>
+        <a class="btn o" href="mailto:hello@analuciaaos.com?subject=30-minute%20diagnostic">Agende um diagnóstico de 30 minutos</a>
+        <span class="mailcopy"><span class="addr" id="addr-top">hello@analuciaaos.com</span> <button type="button" class="copy" data-copy-email="addr-top" hidden>Copiar e-mail</button></span>
+      </div>
+      <p class="note"><span>Núcleo gratuito · aberto para inspeção</span><span aria-hidden="true">Role ↓</span></p>
+    </div>
+  </section>
+
+  <section class="view" id="how" data-nav="how" aria-labelledby="h-how">
+    <div class="wrap">
+      <p class="tag">01 · A ideia</p>
+      <h2 id="h-how">Três papéis. <em>Um deles é você.</em></h2>
+      <p class="lead">Agentes de IA são rápidos e às vezes erram. O ciclo dá a cada parte uma única tarefa, para que a velocidade nunca substitua o bom senso.</p>
+      <ul class="cards">
+        <li class="card"><p class="n">Dono · você</p><h3>Decide e assina</h3><p>Define o objetivo, aprova o que importa e é o único que pode fechar um trabalho de risco.</p></li>
+        <li class="card"><p class="n">Diretor</p><h3>Planeja e confere</h3><p>Transforma sua intenção em ordens pequenas e delimitadas e verifica o resultado no disco, não em um resumo.</p></li>
+        <li class="card"><p class="n">Executor</p><h3>Constrói, dentro de uma caixa</h3><p>O agente de código faz o trabalho dentro de limites: um orçamento, um escopo e arquivos que ele não pode tocar.</p></li>
+      </ul>
+      <p class="band"><strong>Regra do ciclo:</strong>um agente pode propor e construir. Só o dono pode aprovar e fechar.</p>
+    </div>
+  </section>
+
+  <section class="view" id="loop" data-nav="how" aria-labelledby="h-loop">
+    <div class="wrap">
+      <p class="tag">02 · O ciclo</p>
+      <h2 id="h-loop">Seis passos. <em>Cada um deixa um rastro.</em></h2>
+      <ol class="steps">
+        <li><p class="k">Passo 1</p><h3><button class="step-toggle" type="button" aria-controls="ex-1" aria-expanded="true">Intenção</button></h3><p>Você diz o que quer, com suas palavras.</p><p class="example" id="ex-1">Por exemplo, você escreve “adicione uma página de contato”. Por enquanto, nada mais é preciso de você.</p></li>
+        <li><p class="k">Passo 2</p><h3><button class="step-toggle" type="button" aria-controls="ex-2" aria-expanded="true">Ordem</button></h3><p>O diretor escreve uma ordem pequena e delimitada, com um orçamento.</p><p class="example" id="ex-2">A ordem informa seu orçamento em minutos e tentativas, seu nível de risco e as verificações que vão provar que está pronta.</p></li>
+        <li><p class="k">Passo 3</p><h3><button class="step-toggle" type="button" aria-controls="ex-3" aria-expanded="true">Construção</button></h3><p>O executor trabalha dentro dos limites dessa ordem.</p><p class="example" id="ex-3">Se o agente tentar editar uma ordem ou suas verificações, a ferramenta bloqueia a edição antes que ela aconteça, desde que o plugin esteja ativo na pasta do projeto.</p></li>
+        <li><p class="k">Passo 4</p><h3><button class="step-toggle" type="button" aria-controls="ex-4" aria-expanded="true">Verificação</button></h3><p>Verificações automáticas são executadas. Ninguém avalia o próprio trabalho.</p><p class="example" id="ex-4">As verificações foram escritas pelo diretor, não pelo agente; uma ordem de alto risco as executa duas vezes.</p></li>
+        <li><p class="k">Passo 5</p><h3><button class="step-toggle" type="button" aria-controls="ex-5" aria-expanded="true">Evidências</button></h3><p>Os resultados são salvos como arquivos que você pode abrir.</p><p class="example" id="ex-5">O relatório guarda a saída original de cada verificação, ao lado da ordem a que pertence.</p></li>
+        <li><p class="k">Passo 6</p><h3><button class="step-toggle" type="button" aria-controls="ex-6" aria-expanded="true">Você assina</button></h3><p>Você fecha, ou devolve com uma nota.</p><p class="example" id="ex-6">Você digita CLOSE para o trabalho aprovado, ou comenta um documento; sua nota chega ao agente.</p></li>
+      </ol>
+      <p class="band"><strong>Registro à prova de adulteração.</strong>Cada passo é gravado em um registro encadeado. Se alguém editar o passado, a cadeia se rompe e a ferramenta avisa você.</p>
+      <ul class="cards small">
+        <li class="card"><p><strong>Foi interrompido?</strong> Continue de onde parou; a ferramenta mostra o que ficou em aberto.</p></li>
+        <li class="card"><p><strong>Arriscado demais?</strong> Ordens de risco maior precisam da sua confirmação digitada.</p></li>
+        <li class="card"><p><strong>Perdeu o notebook?</strong> O projeto é reconstruído a partir do repositório.</p></li>
+      </ul>
+
+      <figure class="panel" aria-labelledby="flow-title">
+        <figcaption><span class="kicker" id="flow-title">O ciclo num relance · quem faz o quê</span></figcaption>
+        <div class="filters" role="group" aria-label="Mostrar os passos por quem age">
+          <button type="button" data-filter="all" aria-pressed="true" hidden>Todos</button>
+          <button type="button" data-filter="person" aria-pressed="false" hidden>Pessoa</button>
+          <button type="button" data-filter="auto" aria-pressed="false" hidden>Automático</button>
+          <button type="button" data-filter="gate" aria-pressed="false" hidden>Controle</button>
+          <button type="button" data-filter="deliverable" aria-pressed="false" hidden>Entregável</button>
+        </div>
+        <div class="flow-scroll">
+          <svg class="flow" viewBox="0 0 1220 300" role="img" aria-labelledby="flow-svg-t flow-svg-d" focusable="false">
+            <title id="flow-svg-t">O fluxo do ciclo</title>
+            <desc id="flow-svg-d">Ordem, admissão, construção, verificação, entrega, assinatura, e um retorno tracejado da assinatura para a ordem, para a melhoria contínua.</desc>
+            <defs><marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0 0L10 5L0 10z" class="ar"/></marker></defs>
+            <g class="edges">
+              <path d="M200 110H232"/><path d="M372 110H404"/><path d="M544 110H578"/><path d="M712 110H746"/><path d="M886 110H918"/>
+              <path class="loopback" d="M1015 152V240H128V158"/>
+            </g>
+            <g data-step="order" data-actor="person"><rect class="n person" x="56" y="70" width="144" height="80" rx="40"/><text x="128" y="104" class="t">1 · Ordem</text><text x="128" y="126" class="s">você a define</text></g>
+            <g data-step="admit" data-actor="auto"><rect class="n auto" x="232" y="70" width="140" height="80" rx="10"/><text x="302" y="104" class="t">2 · Admitir</text><text x="302" y="126" class="s">aos admit</text></g>
+            <g data-step="build" data-actor="auto"><rect class="n auto" x="404" y="70" width="140" height="80" rx="10"/><text x="474" y="104" class="t">3 · Construir</text><text x="474" y="126" class="s">Claude Code</text></g>
+            <g data-step="verify" data-actor="gate"><path class="n gate" d="M645 50L712 110L645 170L578 110z"/><text x="645" y="106" class="t">4 · Verificar</text><text x="645" y="126" class="s">passa ou não?</text></g>
+            <g data-step="deliver" data-actor="deliverable"><rect class="n deliverable" x="746" y="70" width="140" height="80" rx="10"/><text x="816" y="104" class="t">5 · Entregar</text><text x="816" y="126" class="s">evidências + resumo</text></g>
+            <g data-step="sign" data-actor="person"><rect class="n person" x="918" y="70" width="194" height="80" rx="40"/><text x="1015" y="104" class="t">6 · Assinar</text><text x="1015" y="126" class="s">você digita CLOSE</text></g>
+            <text x="572" y="266" class="s improve">melhoria contínua: o que se aprendeu volta como um adendo</text>
+          </svg>
+        </div>
+        <ul class="legend" aria-label="Legenda">
+          <li><i class="sw person"></i>Pessoa (decide e assina)</li>
+          <li><i class="sw auto"></i>Automático (aos)</li>
+          <li><i class="sw gate"></i>Controle (passa / não passa)</li>
+          <li><i class="sw deliverable"></i>Entregável</li>
+          <li><i class="sw improve"></i>Melhoria contínua</li>
+        </ul>
+        <p class="flow-info" id="flow-info" aria-live="polite">Aponte ou toque em um passo para ver o que acontece e quem age.</p>
+        <ol class="flow-list" id="flow-list">
+          <li data-step="order" data-actor="person"><strong>Ordem</strong> — você define o que quer; o diretor coloca por escrito. <em>Quem age: você.</em></li>
+          <li data-step="admit" data-actor="auto"><strong>Admitir</strong> — aos admit registra a ordem e a coloca na fila. <em>Quem age: a ferramenta.</em></li>
+          <li data-step="build" data-actor="auto"><strong>Construir</strong> — o agente de código trabalha dentro dos limites da ordem. <em>Quem age: o agente.</em></li>
+          <li data-step="verify" data-actor="gate"><strong>Verificar</strong> — as verificações rodam; o trabalho passa ou volta. <em>Quem age: a ferramenta, como controle.</em></li>
+          <li data-step="deliver" data-actor="deliverable"><strong>Entregar</strong> — as evidências e um resumo ficam salvos para você. <em>Resultado: arquivos que você pode abrir.</em></li>
+          <li data-step="sign" data-actor="person"><strong>Assinar</strong> — você fecha, ou devolve com uma nota. <em>Quem age: você.</em></li>
+        </ol>
+      </figure>
+    </div>
+  </section>
+
+  <section class="view" id="see" data-nav="see" aria-labelledby="h-see">
+    <div class="wrap">
+      <p class="tag">03 · O que você vê</p>
+      <h2 id="h-see">Uma tela para decidir. <em>Palavras simples.</em></h2>
+      <div class="two">
+        <pre class="term" aria-label="Exemplo da tela de assinatura em um terminal"><span class="d">$ aos sign</span>
+<span class="g">1 document(s) waiting for your review.</span>
+<span class="d">──────────────────────────────</span>
+Document: Hosting options for the new app (order ORD-0018)
+<span class="d">  in short: one page, version 2</span>
+
+<span class="y">approve</span> · <span class="y">comment</span> · <span class="y">reject</span> · open
+&gt; comment
+  Your comment (what should change): the cost does not include the domain.
+<span class="g">  Comment recorded: the agent will see it.</span></pre>
+        <div class="doc">
+          <p class="kicker">Resumo de decisão · uma página</p>
+          <h3>Onde o aplicativo deve ficar?</h3>
+          <p>Escolha um lugar para os primeiros clientes. Cada opção mostra seu custo mensal e quem guarda as chaves.</p>
+          <table>
+            <caption class="kicker">Ilustrativo: nenhum custo é mostrado nesta página.</caption>
+            <thead><tr><th scope="col">Opção</th><th scope="col">Custo mensal</th><th scope="col">Quem opera</th></tr></thead>
+            <tbody>
+              <tr class="rec"><td><strong>Plataforma gerenciada</strong> <span aria-label="recomendada">✓</span></td><td>no resumo, com a data</td><td>Provedor</td></tr>
+              <tr><td>Seu próprio servidor</td><td>no resumo, com a data</td><td>Você</td></tr>
+            </tbody>
+          </table>
+          <p><strong>Precisamos de você:</strong> escolha uma opção.</p>
+          <ul class="choices" aria-label="Suas escolhas"><li class="a">Aprovar</li><li>Comentar</li><li>Rejeitar</li></ul>
+        </div>
+      </div>
+
+      <figure class="panel orders" aria-labelledby="orders-title">
+        <figcaption><span class="kicker" id="orders-title">Painel de ordens · Exemplo</span></figcaption>
+        <div class="table-scroll">
+          <table class="orders-table">
+            <thead><tr><th scope="col">Ordem</th><th scope="col">Objetivo</th><th scope="col">Estado</th><th scope="col">Verificação</th><th scope="col">Assinatura</th></tr></thead>
+            <tbody>
+              <tr><td>ORD-0001</td><td>Estrutura do projeto</td><td><span class="st closed">fechada</span></td><td>todas as verificações passaram</td><td>assinada por você</td></tr>
+              <tr><td>ORD-0002</td><td>Tela inicial</td><td><span class="st delivered">entregue</span></td><td>todas as verificações passaram</td><td>esperando por você</td></tr>
+              <tr><td>ORD-0003</td><td>Página de contato</td><td><span class="st running">em andamento</span></td><td>—</td><td>—</td></tr>
+              <tr><td>ORD-0004</td><td>Fluxo de cadastro</td><td><span class="st blocked">bloqueada</span></td><td>precisa da sua decisão</td><td>—</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="chain" aria-label="Cadeia de eventos (exemplo)">
+          <ol><li>evento</li><li>evento</li><li>evento</li><li>evento</li></ol>
+          <span class="intact">cadeia intacta ✓</span>
+        </div>
+      </figure>
+      <p class="note"><span>Telas ilustrativas · ordens de exemplo</span></p>
+    </div>
+  </section>
+
+  <section class="view" id="start" data-nav="start" aria-labelledby="h-start">
+    <div class="wrap">
+      <p class="tag">04 · Começar</p>
+      <h2 id="h-start">Quatro passos. <em>Depois, sua primeira hora.</em></h2>
+      <div class="two" style="align-items:start">
+        <div>
+          <div class="before" aria-labelledby="h-before">
+            <h3 id="h-before">Antes de começar</h3>
+            <p>Cerca de 10 a 15 minutos se você instalar só isto.</p>
+            <ul>
+              <li><strong>Git</strong>, o programa que guarda o histórico do projeto. Confira: <code id="c-git">git --version</code> <button type="button" class="copy" data-copy="c-git" hidden>Copiar</button></li>
+              <li><strong>Node.js LTS</strong>, um programa gratuito que o ciclo utiliza internamente, instalado uma vez. Em nodejs.org, no Windows escolha o botão “Windows Installer (.msi)” e aceite as opções padrão; no macOS use o instalador do macOS, e no Linux o pacote do seu sistema ou o download pré-compilado. Confira: <code id="c-node">node --version</code> <button type="button" class="copy" data-copy="c-node" hidden>Copiar</button></li>
+              <li><strong>Claude Code</strong>, com login feito.</li>
+              <li><strong>O aplicativo Claude para desktop</strong>, só se você quiser um chat com uma pasta conectada.</li>
+              <li><strong>Uma pasta de projeto vazia.</strong></li>
+            </ul>
+            <p class="small">Você não precisa de Chocolatey, Visual Studio, Python nem Docker.</p>
+          </div>
+          <ol class="start">
+            <li><div>Adicione o plugin<span class="cmd"><code id="c-add">claude plugin marketplace add AnaluciaAOS/analucia-aos</code><button type="button" class="copy" data-copy="c-add" hidden>Copiar</button></span></div></li>
+            <li><div>Instale<span class="cmd"><code id="c-install">claude plugin install analucia@analucia-aos --scope project</code><button type="button" class="copy" data-copy="c-install" hidden>Copiar</button></span></div></li>
+            <li><div>Abra o Claude Code nessa mesma pasta<span class="hint">Não em uma subpasta: o plugin carrega suas proteções só na pasta onde foi instalado. Em uma pasta ainda não configurada, a primeira mensagem diz que o plugin está instalado e que a pasta não está configurada, e mostra o comando aos init exato para executar. “Status:” aparece só em uma pasta já configurada.</span></div></li>
+            <li><div>Responda à configuração<span class="hint">O aos init faz 15 perguntas fechadas em 3 blocos, com o seu progresso e o tempo restante: cerca de 5 minutos. A primeira pergunta escolhe o idioma. No fim aparece um resumo, e nada é gravado até você digitar CONFIRM.</span></div></li>
+          </ol>
+          <p class="sr-only" id="copy-status" aria-live="polite"></p>
+          <div class="actions" data-contact style="margin-top:30px"><a class="btn" href="mailto:hello@analuciaaos.com?subject=30-minute%20diagnostic">Agende um diagnóstico de 30 minutos</a>
+            <span class="mailcopy"><span class="addr" id="addr-start">hello@analuciaaos.com</span> <button type="button" class="copy" data-copy-email="addr-start" hidden>Copiar e-mail</button></span></div>
+        </div>
+        <aside class="lim" id="talk" data-nav="talk" aria-labelledby="h-lim">
+          <h3 id="h-lim">Limites honestos</h3>
+          <p>Ele não escreve sua estratégia e não transforma uma ideia fraca em boa. Não substitui a revisão do que chega a clientes reais. Hoje ele precisa do Claude Code. Os preços ainda não foram definidos; o núcleo é de uso gratuito.</p>
+          <p class="contact">Dúvidas? <a href="mailto:hello@analuciaaos.com">hello@analuciaaos.com</a></p>
+        </aside>
+      </div>
+    </div>
+  </section>
+  <section class="view" id="pricing" data-nav="pricing" aria-labelledby="h-pricing">
+    <div class="wrap">
+      <p class="tag">05 · Preços</p>
+      <h2 id="h-pricing">Preços, sem rodeios. <em>O núcleo é gratuito.</em></h2>
+      <ul class="cards pricing">
+        <li class="card"><p class="n">Grátis</p><h3>Núcleo</h3><p>Papéis, ordens, evidência e assinatura. Roda na sua própria máquina e está aberto para inspeção.</p><a class="btn" href="#start">Instalar</a></li>
+        <li class="card"><p class="n">Em breve</p><h3>Serviços online</h3><p>Um painel, uma planilha online e módulos premium, em um servidor operado pelo projeto. O preço é publicado antes de qualquer cobrança.</p><a class="btn o" href="mailto:hello@analuciaaos.com?subject=Online%20services">Avise-me quando abrir</a></li>
+        <li class="card"><p class="n">Chamada</p><h3>Primeiros passos</h3><p>Uma chamada para configurar com você o seu primeiro projeto.</p><a class="btn o" href="mailto:hello@analuciaaos.com?subject=30-minute%20diagnostic">Agende um diagnóstico de 30 minutos</a></li>
+      </ul>
+      <p class="note"><span>Não é preciso cartão para começar.</span><span>Nada é cobrado sem que você veja antes.</span></p>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>© 2026 <span class="name"></span></span>
+    <span><a href="../privacy.html" hreflang="en">Privacidade (em inglês)</a> · Sem cookies, nada é carregado de outros sites</span>
+  </div>
+</footer>
+
+<div class="cta-bar"><a class="btn" href="mailto:hello@analuciaaos.com?subject=30-minute%20diagnostic">Agende um diagnóstico de 30 minutos</a></div>
+</body>
+</html>

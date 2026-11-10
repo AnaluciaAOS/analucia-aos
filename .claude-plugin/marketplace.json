@@ -1,0 +1,16 @@
+{
+  "name": "analucia-aos",
+  "owner": {
+    "name": "Erwing Reyes"
+  },
+  "metadata": {
+    "description": "Analucia AOS: an agent operating system for running software work as typed orders, evidence and an append-only event log."
+  },
+  "plugins": [
+    {
+      "name": "analucia",
+      "source": "./plugins/analucia",
+      "description": "Analucia AOS core: orders, roles, evidence and an append-only event log."
+    }
+  ]
+}

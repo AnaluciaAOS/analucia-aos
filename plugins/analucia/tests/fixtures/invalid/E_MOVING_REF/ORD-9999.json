@@ -1,0 +1,10 @@
+{
+  "order": "ORD-9999",
+  "checks": [
+    {
+      "name": "specs unchanged (ends the range at a moving ref)",
+      "run": "git diff --quiet 8ea118d HEAD -- core",
+      "expect_exit": 0
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "order": "ORD-NNNN",
+  "checks": [
+    {
+      "name": "specs unchanged by this order (fixed range: base SHA to {order_commit}, never HEAD)",
+      "run": "git diff --quiet 8ea118d {order_commit} -- core",
+      "expect_exit": 0
+    }
+  ]
+}

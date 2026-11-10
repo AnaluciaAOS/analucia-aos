@@ -1,0 +1,52 @@
+{
+  "permissions": {
+    "allow": [
+      "Edit(/**)",
+      "Bash(node *)",
+      "Bash(git status *)",
+      "Bash(git diff *)",
+      "Bash(git log *)",
+      "Bash(git show *)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git rev-parse *)",
+      "Bash(git ls-files *)",
+      "Bash(git check-ignore *)",
+      "Bash(ls *)",
+      "Bash(cat *)",
+      "Bash(head *)",
+      "Bash(tail *)",
+      "Bash(wc *)",
+      "Bash(grep *)",
+      "Bash(pwd)",
+      "Bash(sha256sum *)"
+    ],
+    "deny": [
+      "Bash(git push --force *)",
+      "Bash(git push * --force*)",
+      "Bash(git push -f *)",
+      "Bash(git push * -f*)",
+      "Bash(git reset --hard *)",
+      "Bash(rm -rf *)",
+      "Bash(rm -fr *)",
+      "Read(**/.env)",
+      "Read(**/.env.*)",
+      "Read(**/*.pem)",
+      "Read(**/*.key)"
+    ],
+    "ask": [
+      "Bash(git push *)"
+    ]
+  },
+  "enabledPlugins": {
+    "analucia@analucia-aos": true
+  },
+  "extraKnownMarketplaces": {
+    "analucia-aos": {
+      "source": {
+        "source": "github",
+        "repo": "AnaluciaAOS/analucia-aos"
+      }
+    }
+  }
+}

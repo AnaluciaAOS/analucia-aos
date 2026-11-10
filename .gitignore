@@ -1,0 +1,17 @@
+# Generated views (never committed)
+.analucia/views/
+
+# Local Claude Code settings (the committed .claude/settings.json is the project profile, SPEC-0004 §3)
+.claude/settings.local.json
+
+# Dependencies
+node_modules/
+
+# OS and editor junk
+.DS_Store
+Thumbs.db
+Desktop.ini
+.vscode/
+.idea/
+*.swp
+*~

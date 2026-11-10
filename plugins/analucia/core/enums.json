@@ -1,0 +1,146 @@
+{
+  "$comment": "Single machine source for every closed list in core/NOMENCLATURE.md (SPEC-0001) and core/SPEC-0003-RULES-ERRORS-RISK-COST.md §3. A drift test keeps them in sync.",
+  "spec": "SPEC-0001",
+  "spec_version": "0.1.0",
+  "roles": [
+    "owner",
+    "director",
+    "executor",
+    "contributor"
+  ],
+  "actors": [
+    "owner",
+    "director",
+    "executor",
+    "contributor",
+    "system"
+  ],
+  "record_types": [
+    "order",
+    "decision",
+    "spec",
+    "observation",
+    "amendment",
+    "ask",
+    "event"
+  ],
+  "record_id_prefixes": {
+    "order": "ORD",
+    "decision": "DEC",
+    "spec": "SPEC",
+    "observation": "OBS",
+    "amendment": "AMD",
+    "ask": "ASK"
+  },
+  "order_kinds": [
+    "build",
+    "fix",
+    "hotfix",
+    "data_op",
+    "migration",
+    "ux",
+    "research"
+  ],
+  "order_states": [
+    "draft",
+    "ready",
+    "queued",
+    "active",
+    "paused",
+    "blocked",
+    "delivered",
+    "verified",
+    "closed",
+    "rejected",
+    "superseded",
+    "cancelled"
+  ],
+  "terminal_states": [
+    "closed",
+    "rejected",
+    "superseded",
+    "cancelled"
+  ],
+  "run_outcomes": [
+    "done",
+    "blocked",
+    "needs_decision",
+    "budget_exhausted",
+    "failed"
+  ],
+  "evidence_levels": [
+    "verified",
+    "derived",
+    "observed",
+    "hypothesis",
+    "unknown"
+  ],
+  "admission_decisions": [
+    "admit",
+    "defer",
+    "reject",
+    "duplicate",
+    "escalate"
+  ],
+  "ask_kinds": [
+    "sign",
+    "decide",
+    "act",
+    "provide"
+  ],
+  "event_types": [
+    "role.declared",
+    "record.created",
+    "record.amended",
+    "order.admitted",
+    "order.state_changed",
+    "run.started",
+    "run.finished",
+    "evidence.attached",
+    "operation.logged",
+    "deploy.recorded",
+    "ask.opened",
+    "ask.resolved",
+    "rule.written_back",
+    "eval.run",
+    "adoption.audited",
+    "onboarding.started",
+    "onboarding.completed",
+    "owner.signed",
+    "hosting.chosen",
+    "review.requested",
+    "review.decision",
+    "session.start",
+    "session.end",
+    "backup.pushed"
+  ],
+  "relation_fields": [
+    "parent",
+    "amends",
+    "supersedes",
+    "absorbs",
+    "reverts",
+    "depends_on"
+  ],
+  "deploy_policies": [
+    "batch",
+    "continuous"
+  ],
+  "risk_levels": [
+    "low",
+    "medium",
+    "high"
+  ],
+  "cost_effects": [
+    "none",
+    "build",
+    "deploy",
+    "service",
+    "data"
+  ],
+  "cost_alert_thresholds": [
+    50,
+    80,
+    100
+  ]
+}

@@ -1,0 +1,1 @@
+{"wip_limit":1,"budget":{"max_minutes":60,"max_attempts":2},"deploy":{"policy":"batch"},"protected_branches":["main"],"locale":"en"}

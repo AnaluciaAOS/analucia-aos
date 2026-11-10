@@ -1,0 +1,4 @@
+#!/bin/sh
+# Installed by "aos install-git-hooks" (SPEC-0002 §4, Q-90): refuse a push under the wrong GitHub account.
+# Arguments from git: $1 = remote name, $2 = remote URL.
+exec node "$(git rev-parse --show-toplevel)/plugins/analucia/bin/aos.mjs" check-push "$1" "$2"

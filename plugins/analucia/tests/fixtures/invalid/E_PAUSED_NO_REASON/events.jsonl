@@ -1,0 +1,1 @@
+{"id":"01JAAAAAAAAAAAAAAAAAAAAAAA","ts":"2026-10-20T10:00:00-05:00","type":"order.state_changed","actor":"executor","subject":"ORD-0001","payload":{"from":"active","to":"paused"},"prev":null}

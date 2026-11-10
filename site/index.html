@@ -1,0 +1,354 @@
+<!doctype html>
+<html lang="en" class="no-js">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hand the work to AI. Keep the decisions.</title>
+<meta name="description" content="A simple loop that lets AI agents build for you, while you decide, see the evidence and sign. Nothing closes without you.">
+<link rel="stylesheet" href="style.css">
+<link rel="alternate" hreflang="en" href="index.html">
+<link rel="alternate" hreflang="es" href="es/index.html">
+<link rel="alternate" hreflang="pt-BR" href="pt/index.html">
+<link rel="alternate" hreflang="hi" href="hi/index.html">
+<link rel="alternate" hreflang="x-default" href="index.html">
+<script>
+/* One small inline script (ORD-0026, ORD-0027): progressive enhancement only. No storage, no cookies, no requests. */
+/* WhatsApp (ORD-0027 D): the number with its country code, digits only. Empty: WhatsApp is not shown. */
+var WHATSAPP_NUMBER = '';
+var WA_TEXT = 'Hello, I would like to talk about a 30-minute diagnostic.';
+var WA_ALWAYS = false; /* English page: only for readers in one of the two time zones checked below */
+document.documentElement.className = 'js';
+document.addEventListener('DOMContentLoaded', function () {
+  var $ = function (s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); };
+  /* B. Copy buttons */
+  $('[data-copy]').forEach(function (b) {
+    b.hidden = false;
+    b.addEventListener('click', function () {
+      var code = document.getElementById(b.getAttribute('data-copy'));
+      var done = function () {
+        var live = document.getElementById('copy-status');
+        b.textContent = 'Copied'; live.textContent = 'Copied: ' + code.textContent;
+        setTimeout(function () { b.textContent = 'Copy'; }, 2000);
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(code.textContent).then(done, function () { select(code); });
+      } else { select(code); }
+    });
+  });
+  /* ORD-0027 A. Copy the contact address */
+  $('[data-copy-email]').forEach(function (b) {
+    b.hidden = false;
+    b.addEventListener('click', function () {
+      var addr = document.getElementById(b.getAttribute('data-copy-email'));
+      var done = function () {
+        b.textContent = 'Copied'; document.getElementById('copy-status').textContent = 'Copied: ' + addr.textContent;
+        setTimeout(function () { b.textContent = 'Copy email'; }, 2000);
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(addr.textContent).then(done, function () { select(addr); });
+      } else { select(addr); }
+    });
+  });
+  /* ORD-0027 D. WhatsApp link, only when a number is set (and, here, only for the two time zones checked below) */
+  var wa = WHATSAPP_NUMBER.replace(/\D/g, ''), tz = '';
+  try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch (e) { tz = ''; }
+  if (wa && (WA_ALWAYS || tz === 'Asia/Kolkata' || tz === 'Asia/Calcutta')) {
+    $('[data-contact]').forEach(function (box) {
+      var a = document.createElement('a');
+      a.className = 'btn o'; a.target = '_blank'; a.rel = 'noopener';
+      a.href = 'https://wa.me/' + wa + '?text=' + encodeURIComponent(WA_TEXT);
+      a.textContent = 'Talk on WhatsApp';
+      box.appendChild(a);
+    });
+  }
+  function select(el) { var r = document.createRange(); r.selectNodeContents(el); var s = getSelection(); s.removeAllRanges(); s.addRange(r); }
+  /* C. Loop steps open their example */
+  $('.step-toggle').forEach(function (t) {
+    var ex = document.getElementById(t.getAttribute('aria-controls'));
+    t.setAttribute('aria-expanded', 'false'); ex.hidden = true;
+    t.addEventListener('click', function () {
+      var open = t.getAttribute('aria-expanded') !== 'true';
+      t.setAttribute('aria-expanded', String(open)); ex.hidden = !open;
+    });
+  });
+  /* D. The nav link of the section in view */
+  if ('IntersectionObserver' in window) {
+    var links = $('.nav ul a[href^="#"]');
+    var io = new IntersectionObserver(function (es) {
+      es.forEach(function (e) {
+        if (!e.isIntersecting) return;
+        links.forEach(function (a) {
+          var on = a.getAttribute('href') === '#' + e.target.getAttribute('data-nav');
+          a.classList.toggle('is-active', on);
+          if (on) a.setAttribute('aria-current', 'true'); else a.removeAttribute('aria-current');
+        });
+      });
+    }, { rootMargin: '-45% 0px -50% 0px' });
+    $('[data-nav]').forEach(function (s) { io.observe(s); });
+  }
+  /* H. The loop diagram: highlight a step, filter by who acts */
+  var info = document.getElementById('flow-info');
+  var show = function (id) {
+    $('[data-step]').forEach(function (n) { n.classList.toggle('is-on', n.getAttribute('data-step') === id); });
+    var li = document.querySelector('#flow-list [data-step="' + id + '"]');
+    if (li) info.textContent = li.textContent;
+  };
+  $('.flow [data-step]').forEach(function (g) {
+    g.setAttribute('tabindex', '0'); g.setAttribute('role', 'button');
+    var id = g.getAttribute('data-step');
+    g.addEventListener('mouseenter', function () { show(id); });
+    g.addEventListener('focus', function () { show(id); });
+    g.addEventListener('click', function () { show(id); });
+  });
+  $('[data-filter]').forEach(function (b) {
+    b.hidden = false;
+    b.addEventListener('click', function () {
+      var who = b.getAttribute('data-filter');
+      $('[data-filter]').forEach(function (x) { x.setAttribute('aria-pressed', String(x === b)); });
+      $('[data-actor]').forEach(function (n) { n.classList.toggle('is-dim', who !== 'all' && n.getAttribute('data-actor') !== who); });
+    });
+  });
+});
+</script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="topbar">
+  <div class="wrap nav">
+    <a class="logo" href="#top"><span class="name"></span></a>
+    <nav aria-label="Sections">
+      <ul>
+        <li><a href="#how">How it works</a></li>
+        <li><a href="#see">What you see</a></li>
+        <li><a href="#start">Get started</a></li>
+        <li><a href="#pricing">Pricing</a></li>
+        <li><a href="#talk">Talk to us</a></li>
+      </ul>
+    </nav>
+    <nav class="langs" aria-label="Language">
+      <ul>
+        <li><a href="index.html" hreflang="en" lang="en" aria-current="page">English</a></li>
+        <li><a href="es/index.html" hreflang="es" lang="es">Español</a></li>
+        <li><a href="pt/index.html" hreflang="pt-BR" lang="pt-BR">Português</a></li>
+        <li><a href="hi/index.html" hreflang="hi" lang="hi">हिन्दी</a></li>
+      </ul>
+    </nav>
+    <a class="btn btn-sm cta-top" href="mailto:hello@analuciaaos.com?subject=30-minute%20diagnostic">Book a 30-minute diagnostic</a>
+  </div>
+</header>
+
+<main id="main">
+  <section class="view hero" id="top" data-nav="top" aria-labelledby="h-top">
+    <div class="wrap">
+      <p class="tag">An operating system for AI agents</p>
+      <h1 id="h-top">Hand the work to AI.<br><em>Keep the decisions.</em></h1>
+      <p class="lead">A simple loop that lets agents build for you, while you decide, see the evidence and sign. No code to read. Nothing closes without you.</p>
+      <ul class="pills" aria-label="In short">
+        <li>Owner decides</li>
+        <li>Agent builds</li>
+        <li>Evidence, not promises</li>
+        <li>Works with Claude Code</li>
+      </ul>
+      <div class="actions" data-contact>
+        <a class="btn" href="#loop">See how the loop works</a>
+        <a class="btn o" href="mailto:hello@analuciaaos.com?subject=30-minute%20diagnostic">Book a 30-minute diagnostic</a>
+        <span class="mailcopy"><span class="addr" id="addr-top">hello@analuciaaos.com</span> <button type="button" class="copy" data-copy-email="addr-top" hidden>Copy email</button></span>
+      </div>
+      <p class="note"><span>Free core · open to inspect</span><span aria-hidden="true">Scroll ↓</span></p>
+    </div>
+  </section>
+
+  <section class="view" id="how" data-nav="how" aria-labelledby="h-how">
+    <div class="wrap">
+      <p class="tag">01 · The idea</p>
+      <h2 id="h-how">Three roles. <em>One of them is you.</em></h2>
+      <p class="lead">AI agents are fast and sometimes wrong. The loop gives each party one job, so speed never replaces judgment.</p>
+      <ul class="cards">
+        <li class="card"><p class="n">Owner · you</p><h3>Decides and signs</h3><p>Sets the goal, approves what matters, and is the only one who can close a risky piece of work.</p></li>
+        <li class="card"><p class="n">Director</p><h3>Plans and checks</h3><p>Turns your intent into small, bounded orders and verifies the result against the disk, not against a summary.</p></li>
+        <li class="card"><p class="n">Executor</p><h3>Builds, in a box</h3><p>The coding agent does the work inside limits: a budget, a scope, and files it is not allowed to touch.</p></li>
+      </ul>
+      <p class="band"><strong>Rule of the loop:</strong>an agent can propose and build. Only the owner can approve and close.</p>
+    </div>
+  </section>
+
+  <section class="view" id="loop" data-nav="how" aria-labelledby="h-loop">
+    <div class="wrap">
+      <p class="tag">02 · The loop</p>
+      <h2 id="h-loop">Six steps. <em>Every one leaves a trace.</em></h2>
+      <ol class="steps">
+        <li><p class="k">Step 1</p><h3><button class="step-toggle" type="button" aria-controls="ex-1" aria-expanded="true">Intent</button></h3><p>You say what you want, in your words.</p><p class="example" id="ex-1">For example, you write “add a contact page”. Nothing else is needed from you yet.</p></li>
+        <li><p class="k">Step 2</p><h3><button class="step-toggle" type="button" aria-controls="ex-2" aria-expanded="true">Order</button></h3><p>The director writes a small, bounded order with a budget.</p><p class="example" id="ex-2">The order names its budget in minutes and attempts, its risk level and the checks that will prove it is done.</p></li>
+        <li><p class="k">Step 3</p><h3><button class="step-toggle" type="button" aria-controls="ex-3" aria-expanded="true">Build</button></h3><p>The executor works inside the limits of that order.</p><p class="example" id="ex-3">If the agent tries to edit an order or its checks, the tool blocks the edit before it happens, as long as the plugin is active in the project folder.</p></li>
+        <li><p class="k">Step 4</p><h3><button class="step-toggle" type="button" aria-controls="ex-4" aria-expanded="true">Verify</button></h3><p>Automatic checks run. Nobody grades their own work.</p><p class="example" id="ex-4">The checks were written by the director, not by the agent; a high-risk order runs them twice.</p></li>
+        <li><p class="k">Step 5</p><h3><button class="step-toggle" type="button" aria-controls="ex-5" aria-expanded="true">Evidence</button></h3><p>Results are saved as files you can open.</p><p class="example" id="ex-5">The report keeps the raw output of every check, next to the order it belongs to.</p></li>
+        <li><p class="k">Step 6</p><h3><button class="step-toggle" type="button" aria-controls="ex-6" aria-expanded="true">You sign</button></h3><p>You close it, or you send it back with a note.</p><p class="example" id="ex-6">You type CLOSE for work that passed, or comment on a document; your note reaches the agent.</p></li>
+      </ol>
+      <p class="band"><strong>Tamper-evident log.</strong>Every step is written to a chained record. If anyone edits the past, the chain breaks and the tool tells you.</p>
+      <ul class="cards small">
+        <li class="card"><p><strong>Interrupted?</strong> Pick up where it stopped; the tool shows what was left open.</p></li>
+        <li class="card"><p><strong>Too risky?</strong> Higher-risk orders need your typed confirmation.</p></li>
+        <li class="card"><p><strong>Lost a laptop?</strong> The project rebuilds from the repository.</p></li>
+      </ul>
+
+      <figure class="panel" aria-labelledby="flow-title">
+        <figcaption><span class="kicker" id="flow-title">The loop at a glance · who does what</span></figcaption>
+        <div class="filters" role="group" aria-label="Show steps by who acts">
+          <button type="button" data-filter="all" aria-pressed="true" hidden>All</button>
+          <button type="button" data-filter="person" aria-pressed="false" hidden>Person</button>
+          <button type="button" data-filter="auto" aria-pressed="false" hidden>Automatic</button>
+          <button type="button" data-filter="gate" aria-pressed="false" hidden>Gate</button>
+          <button type="button" data-filter="deliverable" aria-pressed="false" hidden>Deliverable</button>
+        </div>
+        <div class="flow-scroll">
+          <svg class="flow" viewBox="0 0 1220 300" role="img" aria-labelledby="flow-svg-t flow-svg-d" focusable="false">
+            <title id="flow-svg-t">The loop flow</title>
+            <desc id="flow-svg-d">Order, admit, build, verify, deliver, sign, and a dashed return from sign to order for continuous improvement.</desc>
+            <defs><marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0 0L10 5L0 10z" class="ar"/></marker></defs>
+            <g class="edges">
+              <path d="M200 110H232"/><path d="M372 110H404"/><path d="M544 110H578"/><path d="M712 110H746"/><path d="M886 110H918"/>
+              <path class="loopback" d="M1015 152V240H128V158"/>
+            </g>
+            <g data-step="order" data-actor="person"><rect class="n person" x="56" y="70" width="144" height="80" rx="40"/><text x="128" y="104" class="t">1 · Order</text><text x="128" y="126" class="s">you define it</text></g>
+            <g data-step="admit" data-actor="auto"><rect class="n auto" x="232" y="70" width="140" height="80" rx="10"/><text x="302" y="104" class="t">2 · Admit</text><text x="302" y="126" class="s">aos admit</text></g>
+            <g data-step="build" data-actor="auto"><rect class="n auto" x="404" y="70" width="140" height="80" rx="10"/><text x="474" y="104" class="t">3 · Build</text><text x="474" y="126" class="s">Claude Code</text></g>
+            <g data-step="verify" data-actor="gate"><path class="n gate" d="M645 50L712 110L645 170L578 110z"/><text x="645" y="106" class="t">4 · Verify</text><text x="645" y="126" class="s">pass or not?</text></g>
+            <g data-step="deliver" data-actor="deliverable"><rect class="n deliverable" x="746" y="70" width="140" height="80" rx="10"/><text x="816" y="104" class="t">5 · Deliver</text><text x="816" y="126" class="s">evidence + summary</text></g>
+            <g data-step="sign" data-actor="person"><rect class="n person" x="918" y="70" width="194" height="80" rx="40"/><text x="1015" y="104" class="t">6 · Sign</text><text x="1015" y="126" class="s">you type CLOSE</text></g>
+            <text x="572" y="266" class="s improve">continuous improvement: what was learned comes back as an addendum</text>
+          </svg>
+        </div>
+        <ul class="legend" aria-label="Legend">
+          <li><i class="sw person"></i>Person (decides and signs)</li>
+          <li><i class="sw auto"></i>Automatic (aos)</li>
+          <li><i class="sw gate"></i>Gate (pass / no pass)</li>
+          <li><i class="sw deliverable"></i>Deliverable</li>
+          <li><i class="sw improve"></i>Continuous improvement</li>
+        </ul>
+        <p class="flow-info" id="flow-info" aria-live="polite">Point at or tap a step to see what happens and who acts.</p>
+        <ol class="flow-list" id="flow-list">
+          <li data-step="order" data-actor="person"><strong>Order</strong> — you define what you want; the director writes it down. <em>Who acts: you.</em></li>
+          <li data-step="admit" data-actor="auto"><strong>Admit</strong> — aos admit records the order and puts it in the queue. <em>Who acts: the tool.</em></li>
+          <li data-step="build" data-actor="auto"><strong>Build</strong> — the coding agent works inside the order's limits. <em>Who acts: the agent.</em></li>
+          <li data-step="verify" data-actor="gate"><strong>Verify</strong> — the checks run; the work passes or goes back. <em>Who acts: the tool, as a gate.</em></li>
+          <li data-step="deliver" data-actor="deliverable"><strong>Deliver</strong> — evidence and a summary are saved for you. <em>Result: files you can open.</em></li>
+          <li data-step="sign" data-actor="person"><strong>Sign</strong> — you close it, or send it back with a note. <em>Who acts: you.</em></li>
+        </ol>
+      </figure>
+    </div>
+  </section>
+
+  <section class="view" id="see" data-nav="see" aria-labelledby="h-see">
+    <div class="wrap">
+      <p class="tag">03 · What you see</p>
+      <h2 id="h-see">One screen to decide. <em>Plain words.</em></h2>
+      <div class="two">
+        <pre class="term" aria-label="Example of the signing screen in a terminal"><span class="d">$ aos sign</span>
+<span class="g">1 document(s) waiting for your review.</span>
+<span class="d">──────────────────────────────</span>
+Document: Hosting options for the new app (order ORD-0018)
+<span class="d">  in short: one page, version 2</span>
+
+<span class="y">approve</span> · <span class="y">comment</span> · <span class="y">reject</span> · open
+&gt; comment
+  Your comment (what should change): the cost does not include the domain.
+<span class="g">  Comment recorded: the agent will see it.</span></pre>
+        <div class="doc">
+          <p class="kicker">Decision brief · one page</p>
+          <h3>Where should the app live?</h3>
+          <p>Pick a home for the first customers. Each option shows its monthly cost and who keeps the keys.</p>
+          <table>
+            <caption class="kicker">Illustrative: no costs are shown on this page.</caption>
+            <thead><tr><th scope="col">Option</th><th scope="col">Monthly cost</th><th scope="col">Who runs it</th></tr></thead>
+            <tbody>
+              <tr class="rec"><td><strong>Managed platform</strong> <span aria-label="recommended">✓</span></td><td>in the brief, with its date</td><td>Provider</td></tr>
+              <tr><td>Your own server</td><td>in the brief, with its date</td><td>You</td></tr>
+            </tbody>
+          </table>
+          <p><strong>We need from you:</strong> choose one option.</p>
+          <ul class="choices" aria-label="Your choices"><li class="a">Approve</li><li>Comment</li><li>Reject</li></ul>
+        </div>
+      </div>
+
+      <figure class="panel orders" aria-labelledby="orders-title">
+        <figcaption><span class="kicker" id="orders-title">Orders panel · Example</span></figcaption>
+        <div class="table-scroll">
+          <table class="orders-table">
+            <thead><tr><th scope="col">Order</th><th scope="col">Goal</th><th scope="col">State</th><th scope="col">Verification</th><th scope="col">Signature</th></tr></thead>
+            <tbody>
+              <tr><td>ORD-0001</td><td>Project structure</td><td><span class="st closed">closed</span></td><td>all checks passed</td><td>signed by you</td></tr>
+              <tr><td>ORD-0002</td><td>Home screen</td><td><span class="st delivered">delivered</span></td><td>all checks passed</td><td>waiting for you</td></tr>
+              <tr><td>ORD-0003</td><td>Contact page</td><td><span class="st running">running</span></td><td>—</td><td>—</td></tr>
+              <tr><td>ORD-0004</td><td>Sign-up flow</td><td><span class="st blocked">blocked</span></td><td>needs your decision</td><td>—</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="chain" aria-label="Event chain (example)">
+          <ol><li>event</li><li>event</li><li>event</li><li>event</li></ol>
+          <span class="intact">chain intact ✓</span>
+        </div>
+      </figure>
+      <p class="note"><span>Illustrative screens · example orders</span></p>
+    </div>
+  </section>
+
+  <section class="view" id="start" data-nav="start" aria-labelledby="h-start">
+    <div class="wrap">
+      <p class="tag">04 · Get started</p>
+      <h2 id="h-start">Four steps. <em>Then your first hour.</em></h2>
+      <div class="two" style="align-items:start">
+        <div>
+          <div class="before" aria-labelledby="h-before">
+            <h3 id="h-before">Before you start</h3>
+            <p>About 10 to 15 minutes if you install only these.</p>
+            <ul>
+              <li><strong>Git</strong>, the program that keeps the project's history. Check: <code id="c-git">git --version</code> <button type="button" class="copy" data-copy="c-git" hidden>Copy</button></li>
+              <li><strong>Node.js LTS</strong>, a free program the Loop uses internally, installed once. On nodejs.org, on Windows choose the “Windows Installer (.msi)” button and accept the defaults; on macOS use the macOS installer, and on Linux your system's package or the prebuilt download. Check: <code id="c-node">node --version</code> <button type="button" class="copy" data-copy="c-node" hidden>Copy</button></li>
+              <li><strong>Claude Code</strong>, signed in.</li>
+              <li><strong>The Claude desktop app</strong>, only if you want a chat with a connected folder.</li>
+              <li><strong>An empty project folder.</strong></li>
+            </ul>
+            <p class="small">You do not need Chocolatey, Visual Studio, Python or Docker.</p>
+          </div>
+          <ol class="start">
+            <li><div>Add the plugin<span class="cmd"><code id="c-add">claude plugin marketplace add AnaluciaAOS/analucia-aos</code><button type="button" class="copy" data-copy="c-add" hidden>Copy</button></span></div></li>
+            <li><div>Install it<span class="cmd"><code id="c-install">claude plugin install analucia@analucia-aos --scope project</code><button type="button" class="copy" data-copy="c-install" hidden>Copy</button></span></div></li>
+            <li><div>Open Claude Code in that same folder<span class="hint">Not in a subfolder: the plugin loads its guards only in the folder where it was installed. In a folder that is not set up yet, the first message says that the plugin is installed and the folder is not set up, and gives the exact aos init command to run. “Status:” appears only in a folder already set up.</span></div></li>
+            <li><div>Answer the setup<span class="hint">aos init asks 15 closed questions in 3 blocks, with your progress and the time left: about 5 minutes. The first question chooses the language. A summary comes at the end, and nothing is written until you type CONFIRM.</span></div></li>
+          </ol>
+          <p class="sr-only" id="copy-status" aria-live="polite"></p>
+          <div class="actions" data-contact style="margin-top:30px"><a class="btn" href="mailto:hello@analuciaaos.com?subject=30-minute%20diagnostic">Book a 30-minute diagnostic</a>
+            <span class="mailcopy"><span class="addr" id="addr-start">hello@analuciaaos.com</span> <button type="button" class="copy" data-copy-email="addr-start" hidden>Copy email</button></span></div>
+        </div>
+        <aside class="lim" id="talk" data-nav="talk" aria-labelledby="h-lim">
+          <h3 id="h-lim">Honest limits</h3>
+          <p>It does not write your strategy and it does not make a weak idea good. It does not replace review of what ships to real customers. It needs Claude Code today. Prices are not set yet; the core is free to use.</p>
+          <p class="contact">Questions? <a href="mailto:hello@analuciaaos.com">hello@analuciaaos.com</a></p>
+        </aside>
+      </div>
+    </div>
+  </section>
+  <section class="view" id="pricing" data-nav="pricing" aria-labelledby="h-pricing">
+    <div class="wrap">
+      <p class="tag">05 · Pricing</p>
+      <h2 id="h-pricing">Pricing, plainly. <em>The core is free.</em></h2>
+      <ul class="cards pricing">
+        <li class="card"><p class="n">Free</p><h3>Core</h3><p>Roles, orders, evidence and sign-off. It runs on your own machine and is open to inspect.</p><a class="btn" href="#start">Install it</a></li>
+        <li class="card"><p class="n">Coming soon</p><h3>Online services</h3><p>A board, an online sheet and premium modules, on a server run by the project. The price is published before anything is charged.</p><a class="btn o" href="mailto:hello@analuciaaos.com?subject=Online%20services">Tell me when it opens</a></li>
+        <li class="card"><p class="n">Call</p><h3>Onboarding</h3><p>One call to set up your first project with you.</p><a class="btn o" href="mailto:hello@analuciaaos.com?subject=30-minute%20diagnostic">Book a 30-minute diagnostic</a></li>
+      </ul>
+      <p class="note"><span>No card needed to start.</span><span>Nothing is charged without you seeing it first.</span></p>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>© 2026 <span class="name"></span></span>
+    <span><a href="privacy.html">Privacy</a> · No cookies, nothing loaded from other sites</span>
+  </div>
+</footer>
+
+<div class="cta-bar"><a class="btn" href="mailto:hello@analuciaaos.com?subject=30-minute%20diagnostic">Book a 30-minute diagnostic</a></div>
+</body>
+</html>

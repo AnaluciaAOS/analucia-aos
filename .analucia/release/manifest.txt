@@ -1,0 +1,54 @@
+# Release manifest (ORD-0030): which tracked paths go into the new, clean public repository and which stay private.
+# One path or glob per line. "*" matches inside one folder, "**" matches any depth. A line "ref: <ref>" names a git ref.
+# A tracked file goes public when it matches a [public] entry and no [private] entry. Private wins.
+# Every [private] entry ends with "  # <reason>". Findings are named by category and rule number of the
+# ORD-0028 report (.analucia/evidence/ORD-0028/report.md); this file holds no matched word, name, address or account.
+#
+# Build the clean tree from HEAD into a folder outside the repository (no git init, no commit, no push, no publish):
+#   node scripts/build-public-tree.mjs <folder outside the repository>
+
+[public]
+.claude-plugin/marketplace.json
+.claude/settings.json
+.gitattributes
+.githooks/pre-push
+.gitignore
+AGENTS.md
+CLAUDE.md
+LICENSE
+README.md
+core/SPEC-0005-ONBOARDING.md
+core/SPEC-0006-ADOPTION-AUDIT.md
+docs/**
+plugins/**
+scripts/**
+site/**
+.analucia/project.example.json
+.analucia/release/manifest.txt
+
+[private]
+.analucia/project.json  # owner configuration with real values (category 5 account, category 3 time-zone identifier); the public tree carries .analucia/project.example.json
+.analucia/events.jsonl  # the event log of this repository; holds a category 5 finding (line 39) and is never edited by hand
+.analucia/evidence/**  # sealed evidence of closed orders; 48 of its files hold findings (categories 2, 3, 4, 5) and it is not edited (ORD-0030 B)
+.analucia/orders/**  # director files and closed orders; ORD-0001, ORD-0003, ORD-0005 and ORD-0027 hold findings (categories 3 and 5)
+.analucia/amendments/**  # director files; AMD-0001 and AMD-0002 hold findings (categories 3 and 5)
+.analucia/verify/**  # director files; ORD-0001, ORD-0026 and ORD-0027 hold a category 5 finding
+.analucia/rollback/**  # director files: the governance record of this repository, not part of the product
+.analucia/director.lock  # director file: hashes of the private director files above
+.analucia/artifacts/**  # review artifacts of closed orders (owner-signed documents); the governance record of this repository
+.analucia/asks/**  # director files: the owner's decisions, the governance record of this repository, not part of the product
+core/NOMENCLATURE.md  # spec, not editable by the executor; line 4 holds a category 3 place name in prose (names list line 307)
+core/SPEC-0002-VERIFY-AND-GUARDS.md  # spec, not editable by the executor; line 4 holds a category 3 place name in prose (names list line 307)
+core/SPEC-0003-RULES-ERRORS-RISK-COST.md  # spec, not editable by the executor; line 4 holds a category 3 place name in prose (names list line 307)
+core/SPEC-0004-OWNER-SHEET-AND-SELF-GOVERNANCE.md  # spec, not editable by the executor; line 4 holds a category 3 place name in prose (names list line 307)
+ref: refs/remotes/origin/backup/2026-10-27  # the backup branch named in the ORD-0028 report (commit 74a1d80); its history holds findings and the personal commit identity
+
+[notes]
+# The 42 commit identities (author and committer name and address of every commit, ORD-0028 categories 3 and 4) are
+# history metadata. They are not in any file and are not copied by the build. The new public repository starts from a
+# fresh first commit made with a project identity, in a later step; that step is not part of ORD-0030.
+# Still in the public tree, for the owner to decide (ORD-0030 C; nothing applied): the owner's person name
+# (LICENSE, .claude-plugin/marketplace.json, plugins/analucia/.claude-plugin/plugin.json), IANA time-zone identifiers
+# in code, tests and site scripts, and one font-family false positive in site/style.css.
+# Two test files use a demo account placeholder added by ORD-0029 (plugins/analucia/tests/next-steps.test.mjs and
+# wizard.test.mjs). It is not the owner's account; the scan's first pass lists it as a second account name.

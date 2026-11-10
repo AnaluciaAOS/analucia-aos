@@ -1,0 +1,50 @@
+{
+  "note": "Kept by the director (AMD-0006). Each price is copied from its source page on checked_on; prices change, so check the source before deciding. The tool lists these options and never picks one.",
+  "options": [
+    {
+      "name": "Fly.io",
+      "kind": "managed",
+      "operated_by": "platform",
+      "monthly_usd": { "min": 2.19, "max": 4.39 },
+      "price_note": "Machines shared-cpu-1x 256MB $2.19 per month; shared-cpu-2x 512MB $4.39 per month; compute only, region iad",
+      "checked_on": "2026-10-26",
+      "source": "https://fly.io/pricing"
+    },
+    {
+      "name": "Vercel",
+      "kind": "managed",
+      "operated_by": "platform",
+      "monthly_usd": { "min": 20, "max": null },
+      "price_note": "Pro $20/mo; Enterprise custom; Hobby $0/mo",
+      "checked_on": "2026-10-26",
+      "source": "https://vercel.com/pricing"
+    },
+    {
+      "name": "DigitalOcean Droplets",
+      "kind": "own-server",
+      "operated_by": "owner",
+      "monthly_usd": { "min": 4.00, "max": 6.00 },
+      "price_note": "Basic Droplet 1 vCPU 512 MiB $4.00; 1 vCPU 1 GiB $6.00",
+      "checked_on": "2026-10-26",
+      "source": "https://www.digitalocean.com/pricing/droplets"
+    },
+    {
+      "name": "Akamai Cloud (Linode)",
+      "kind": "own-server",
+      "operated_by": "owner",
+      "monthly_usd": { "min": 5.00, "max": 12.00 },
+      "price_note": "Shared CPU Nanode 1 GB $5.00; Linode 2 GB $12.00",
+      "checked_on": "2026-10-26",
+      "source": "https://www.akamai.com/cloud/pricing/cpu"
+    },
+    {
+      "name": "Amazon Lightsail",
+      "kind": "own-server",
+      "operated_by": "owner",
+      "monthly_usd": { "min": 5, "max": 7 },
+      "price_note": "Linux bundle with public IPv4, 0.5 GB $5 USD/mo; 1 GB $7 USD/mo",
+      "checked_on": "2026-10-26",
+      "source": "https://aws.amazon.com/lightsail/pricing/"
+    }
+  ]
+}
