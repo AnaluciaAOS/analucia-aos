@@ -247,7 +247,7 @@ footer .wrap { border-top: 1px solid var(--line); padding-top: 14px; display: fl
 .doc table caption { caption-side: bottom; text-align: left; padding-top: 6px; }
 
 /* ---------- ORD-0027: contact, fixes, languages ---------- */
-/* A. The contact address as plain text, with a Copy email button next to the diagnostic button. */
+/* A. The contact address as plain text, with a Copy email button next to the call button. */
 .mailcopy { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 15px; color: var(--ink); }
 .mailcopy .addr { font-weight: 600; user-select: all; }
 

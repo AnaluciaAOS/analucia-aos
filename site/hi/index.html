@@ -15,7 +15,7 @@
 /* One small inline script (ORD-0026, ORD-0027): progressive enhancement only. No storage, no cookies, no requests. */
 /* WhatsApp (ORD-0027 D): the number with its country code, digits only. Empty: WhatsApp is not shown. */
 var WHATSAPP_NUMBER = '';
-var WA_TEXT = 'नमस्ते, मुझे 30 मिनट के डायग्नोस्टिक के बारे में बात करनी है।';
+var WA_TEXT = 'नमस्ते, मुझे 30 मिनट की कॉल बुक करनी है।';
 var WA_ALWAYS = false; /* Hindi page: only for readers in one of the two time zones checked below */
 document.documentElement.className = 'js';
 document.addEventListener('DOMContentLoaded', function () {
@@ -133,7 +133,7 @@ document.addEventListener('DOMContentLoaded', function () {
         <li><a href="index.html" hreflang="hi" lang="hi" aria-current="page">हिन्दी</a></li>
       </ul>
     </nav>
-    <a class="btn btn-sm cta-top" href="mailto:hello@analuciaaos.com?subject=30-minute%20diagnostic">30 मिनट का डायग्नोस्टिक बुक करें</a>
+    <a class="btn btn-sm cta-top" href="mailto:hello@analuciaaos.com?subject=30-minute%20call">30 मिनट की कॉल बुक करें</a>
   </div>
 </header>
 <p class="wrap transnote" id="translation-note" role="note"><span>अनुवाद की समीक्षा चल रही है: एक मूल भाषी पाठक इसे अभी जाँचेगा।</span></p>
@@ -152,7 +152,7 @@ document.addEventListener('DOMContentLoaded', function () {
       </ul>
       <div class="actions" data-contact>
         <a class="btn" href="#loop">देखें कि लूप कैसे काम करता है</a>
-        <a class="btn o" href="mailto:hello@analuciaaos.com?subject=30-minute%20diagnostic">30 मिनट का डायग्नोस्टिक बुक करें</a>
+        <a class="btn o" href="mailto:hello@analuciaaos.com?subject=30-minute%20call">30 मिनट की कॉल बुक करें</a>
         <span class="mailcopy"><span class="addr" id="addr-top">hello@analuciaaos.com</span> <button type="button" class="copy" data-copy-email="addr-top" hidden>ईमेल कॉपी करें</button></span>
       </div>
       <p class="note"><span>मुफ़्त कोर · जाँच के लिए खुला</span><span aria-hidden="true">नीचे देखें ↓</span></p>
@@ -318,7 +318,7 @@ Document: Hosting options for the new app (order ORD-0018)
             <li><div>सेटअप के सवालों के जवाब दें<span class="hint">aos init 3 हिस्सों में 15 बंद सवाल पूछता है, साथ में आपकी प्रगति और बचा हुआ समय: लगभग 5 मिनट। पहला सवाल भाषा चुनता है। आख़िर में एक सारांश आता है, और जब तक आप CONFIRM टाइप नहीं करते, कुछ भी नहीं लिखा जाता।</span></div></li>
           </ol>
           <p class="sr-only" id="copy-status" aria-live="polite"></p>
-          <div class="actions" data-contact style="margin-top:30px"><a class="btn" href="mailto:hello@analuciaaos.com?subject=30-minute%20diagnostic">30 मिनट का डायग्नोस्टिक बुक करें</a>
+          <div class="actions" data-contact style="margin-top:30px"><a class="btn" href="mailto:hello@analuciaaos.com?subject=30-minute%20call">30 मिनट की कॉल बुक करें</a>
             <span class="mailcopy"><span class="addr" id="addr-start">hello@analuciaaos.com</span> <button type="button" class="copy" data-copy-email="addr-start" hidden>ईमेल कॉपी करें</button></span></div>
         </div>
         <aside class="lim" id="talk" data-nav="talk" aria-labelledby="h-lim">
@@ -335,8 +335,8 @@ Document: Hosting options for the new app (order ORD-0018)
       <h2 id="h-pricing">कीमतें, साफ़ शब्दों में। <em>कोर मुफ़्त है।</em></h2>
       <ul class="cards pricing">
         <li class="card"><p class="n">मुफ़्त</p><h3>कोर</h3><p>भूमिकाएँ, ऑर्डर, सबूत और हस्ताक्षर। यह आपकी अपनी मशीन पर चलता है और जाँच के लिए खुला है।</p><a class="btn" href="#start">इसे इंस्टॉल करें</a></li>
-        <li class="card"><p class="n">जल्द आ रहा है</p><h3>ऑनलाइन सेवाएँ</h3><p>एक बोर्ड, एक ऑनलाइन शीट और प्रीमियम मॉड्यूल, प्रोजेक्ट द्वारा चलाए जाने वाले सर्वर पर। कुछ भी चार्ज करने से पहले कीमत प्रकाशित की जाती है।</p><a class="btn o" href="mailto:hello@analuciaaos.com?subject=Online%20services">खुलने पर मुझे बताएँ</a></li>
-        <li class="card"><p class="n">कॉल</p><h3>शुरुआती सेटअप</h3><p>आपके पहले प्रोजेक्ट को आपके साथ सेट अप करने के लिए एक कॉल।</p><a class="btn o" href="mailto:hello@analuciaaos.com?subject=30-minute%20diagnostic">30 मिनट का डायग्नोस्टिक बुक करें</a></li>
+        <li class="card"><p class="n">जल्द आ रहा है</p><h3>सोलो</h3><p>एक प्रोजेक्ट के लिए ऑनलाइन सेवाएँ: एक बोर्ड, एक ऑनलाइन शीट और लागत अलर्ट। कुछ भी चार्ज करने से पहले कीमत प्रकाशित की जाती है।</p><a class="btn o" href="mailto:hello@analuciaaos.com?subject=Notify%20me%20Solo">खुलने पर मुझे बताएँ</a></li>
+        <li class="card"><p class="n">जल्द आ रहा है</p><h3>टीम</h3><p>सोलो की हर चीज़, साथ में प्रीमियम मॉड्यूल, कई हस्ताक्षरकर्ता और सपोर्ट। कुछ भी चार्ज करने से पहले कीमत प्रकाशित की जाती है।</p><a class="btn o" href="mailto:hello@analuciaaos.com?subject=Notify%20me%20Team">खुलने पर मुझे बताएँ</a></li>
       </ul>
       <p class="note"><span>शुरू करने के लिए कार्ड की ज़रूरत नहीं।</span><span>आपके देखे बिना कुछ भी चार्ज नहीं होता।</span></p>
     </div>
@@ -350,6 +350,6 @@ Document: Hosting options for the new app (order ORD-0018)
   </div>
 </footer>
 
-<div class="cta-bar"><a class="btn" href="mailto:hello@analuciaaos.com?subject=30-minute%20diagnostic">30 मिनट का डायग्नोस्टिक बुक करें</a></div>
+<div class="cta-bar"><a class="btn" href="mailto:hello@analuciaaos.com?subject=30-minute%20call">30 मिनट की कॉल बुक करें</a></div>
 </body>
 </html>

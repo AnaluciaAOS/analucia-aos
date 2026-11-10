@@ -60,7 +60,7 @@ test('every link resolves: local files and anchors, and mail only to the contact
     }
   }
   const html = read('index.html');
-  assert.equal((html.match(/href="mailto:hello@analuciaaos\.com\?subject=30-minute%20diagnostic"/g) ?? []).length, 5, 'the five diagnostic buttons (header, hero, get started, the onboarding card of the pricing view, phone bar) are mailto links with a subject');
+  assert.equal((html.match(/href="mailto:hello@analuciaaos\.com\?subject=30-minute%20call"/g) ?? []).length, 4, 'the four call buttons (header, hero, get started, phone bar) are mailto links with a subject (ORD-0036: the onboarding card left the pricing view)');
   assert.doesNotMatch(html, /<form|<input|<textarea/i, 'no form');
 });
 
@@ -178,10 +178,10 @@ test('the one inline script: under 6 KB, no storage, no cookies, no requests, an
   assert.match(script(), /document\.documentElement\.className = 'js'/);
 });
 
-test('A: the diagnostic button is always in reach: sticky header on desktop, a bottom bar on phones that never covers the footer', () => {
+test('A: the call button (ORD-0036: its neutral text) is always in reach: sticky header on desktop, a bottom bar on phones that never covers the footer', () => {
   const css = read('style.css');
-  assert.match(index(), /<header class="topbar">[\s\S]*class="btn btn-sm cta-top" href="mailto:hello@analuciaaos\.com\?subject=30-minute%20diagnostic"/);
-  assert.match(index(), /<div class="cta-bar"><a class="btn" href="mailto:hello@analuciaaos\.com\?subject=30-minute%20diagnostic">/);
+  assert.match(index(), /<header class="topbar">[\s\S]*class="btn btn-sm cta-top" href="mailto:hello@analuciaaos\.com\?subject=30-minute%20call"/);
+  assert.match(index(), /<div class="cta-bar"><a class="btn" href="mailto:hello@analuciaaos\.com\?subject=30-minute%20call">/);
   assert.match(css, /@media \(min-width: 900px\) \{\n {2}\.topbar \{ position: sticky; top: 0;/);
   assert.match(css, /@media \(max-width: 899px\) \{\n {2}\.cta-bar \{ position: fixed;[^}]*bottom: 0;[\s\S]*body \{ padding-bottom: 84px; \}/);
 });
@@ -316,7 +316,7 @@ test('ORD-0027 C: four language pages with the same layout, lang set, hreflang a
 test('ORD-0027 A: the contact address as plain text with a Copy email button, on every page', () => {
   for (const [p] of LANGS) {
     const html = read(p);
-    assert.equal((html.match(/href="mailto:hello@analuciaaos\.com\?subject=30-minute%20diagnostic"/g) ?? []).length, 5, `${p}: the four diagnostic buttons stay, and the onboarding card of the pricing view uses the same one (ORD-0032 C)`);
+    assert.equal((html.match(/href="mailto:hello@analuciaaos\.com\?subject=30-minute%20call"/g) ?? []).length, 4, `${p}: the four call buttons (ORD-0036: neutral text, and the pricing view no longer has one)`);
     const rows = [...html.matchAll(/<span class="mailcopy"><span class="addr" id="(addr-\w+)">hello@analuciaaos\.com<\/span> <button type="button" class="copy" data-copy-email="(addr-\w+)" hidden>[^<]+<\/button><\/span>/g)];
     assert.deepEqual(rows.map((m) => [m[1], m[2]]), [['addr-top', 'addr-top'], ['addr-start', 'addr-start']], p);
     assert.match(html, /<p class="sr-only" id="copy-status" aria-live="polite"><\/p>/, p);
@@ -417,7 +417,7 @@ test('ORD-0032 A.6: the footer shows the product name next to the year, from the
   assert.match(read('style.css'), /\.name::before \{ content: var\(--product-name\); \}/);
 });
 
-test('ORD-0032 C: the pricing view, after Get started, with three cards, two lines, no figure, no price and no plan beyond the three', () => {
+test('ORD-0032 C (cards as ORD-0036 B.1 left them): the pricing view, after Get started, with three cards, two lines, no figure, no price and no plan beyond the three', () => {
   for (const [p] of LANGS) {
     const html = read(p);
     const views = [...html.matchAll(/<section class="view[^"]*" id="([^"]+)"/g)].map((m) => m[1]);
@@ -427,11 +427,10 @@ test('ORD-0032 C: the pricing view, after Get started, with three cards, two lin
     assert.equal(cards.length, 3, `${p}: three cards`);
     assert.match(sec, /<ul class="cards pricing">/, p);
     assert.match(cards[0], /<a class="btn" href="#start">/, `${p}: Core points to the install steps`);
-    assert.match(cards[1], /<a class="btn o" href="mailto:hello@analuciaaos\.com\?subject=[A-Za-z0-9%-]+">/, `${p}: Online services is an email notice`);
-    const diag = /<a class="btn btn-sm cta-top" href="([^"]+)">([^<]+)<\/a>/.exec(html);
-    assert.match(cards[2], new RegExp(`<a class="btn o" href="${diag[1].replace(/[.?]/g, '\\$&')}">${diag[2]}</a>`), `${p}: Onboarding uses the existing contact button, same target and text`);
+    assert.match(cards[1], /<a class="btn o" href="mailto:hello@analuciaaos\.com\?subject=[A-Za-z0-9%-]+">/, `${p}: the first "coming soon" plan is an email notice`);
+    assert.match(cards[2], /<a class="btn o" href="mailto:hello@analuciaaos\.com\?subject=[A-Za-z0-9%-]+">/, `${p}: the second "coming soon" plan is an email notice too (ORD-0036 B.1 removed the onboarding card)`);
     const words = cards.map((c) => c.replace(/<a [\s\S]*?<\/a>/, ' ').replace(/<[^>]+>/g, ' ')).join(' ');
-    assert.doesNotMatch(words, /\d/, `${p}: no figure on the cards (the button text is the existing one)`);
+    assert.doesNotMatch(words, /\d/, `${p}: no figure on the cards`);
     assert.doesNotMatch(sec, /[$€£₹]|\b(?:usd|eur|inr|brl)\b|recommend|recomend|✓|अनुशंस/i, `${p}: no price, currency or "recommended" mark`);
     assert.equal((sec.match(/<h3>/g) ?? []).length, 3, `${p}: no plan beyond the three cards`);
     assert.match(sec, /<\/ul>\s*<p class="note"><span>[^<]+<\/span><span>[^<]+<\/span><\/p>/, `${p}: the two lines below the cards`);
@@ -453,4 +452,58 @@ const blocksOf = (html) => {
 test('ORD-0032 D: the four pages carry the same blocks in every part (headings, paragraphs, list items, buttons, links, tables)', () => {
   const en = blocksOf(index());
   for (const [p] of LANGS) assert.deepEqual(blocksOf(read(p)), en, `${p}: a block that exists in one language and not in another`);
+});
+
+// ---------- ORD-0036 ----------
+
+const pricingOf = (html) => /<section class="view" id="pricing"[\s\S]*?<\/section>/.exec(html)[0];
+const CALL = 'href="mailto:hello@analuciaaos.com?subject=30-minute%20call"';
+// Per page: the call button text, the word the old button used, and how "per month" is written.
+const CALL_WORDS = {
+  'index.html': { text: 'Book a 30-minute call', old: /diagnostic/i, month: /per month|\/\s?month|monthly/i },
+  'es/index.html': { text: 'Reserva una llamada de 30 minutos', old: /diagn[oó]stic/i, month: /al mes|por mes|mensual/i },
+  'pt/index.html': { text: 'Agende uma chamada de 30 minutos', old: /diagn[oó]stic/i, month: /ao mês|por mês|mensal/i },
+  'hi/index.html': { text: '30 मिनट की कॉल बुक करें', old: /डायग्नोस्टिक/, month: /प्रति माह|हर महीने|मासिक/ },
+};
+
+test('ORD-0036 B.1: the pricing view is Free plus two "coming soon" plans, each with a notify-me email button, and no price', () => {
+  const marks = [];
+  for (const [p] of LANGS) {
+    const html = read(p);
+    const sec = pricingOf(html);
+    const cards = [...sec.matchAll(/<li class="card">([\s\S]*?)<\/li>/g)].map((m) => m[1]);
+    assert.equal(cards.length, 3, `${p}: three cards`);
+    const mark = (c) => /<p class="n">([^<]+)<\/p>/.exec(c)[1];
+    assert.match(cards[0], /<a class="btn" href="#start">/, `${p}: the free card points to the install steps`);
+    assert.equal(mark(cards[1]), mark(cards[2]), `${p}: the second and third cards carry the same "coming soon" mark`);
+    assert.notEqual(mark(cards[0]), mark(cards[1]), p);
+    const subjects = cards.slice(1).map((c) => /<a class="btn o" href="mailto:hello@analuciaaos\.com\?subject=([A-Za-z0-9%-]+)">[^<]+<\/a>/.exec(c)?.[1]);
+    assert.deepEqual(subjects, ['Notify%20me%20Solo', 'Notify%20me%20Team'], `${p}: each "coming soon" card asks to be notified, by email`);
+    assert.ok(!sec.includes('30-minute'), `${p}: the call card is no longer in this view`);
+    const text = sec.replace(/<[^>]+>/g, ' ');
+    assert.doesNotMatch(text.replace(/\b05\b/, ' '), /\d/, `${p}: no number in the pricing view (its section number left out)`);
+    assert.doesNotMatch(text, /[$€£₹]|\b(?:usd|eur|inr|brl)\b|US\$|R\$/i, `${p}: no currency`);
+    assert.doesNotMatch(text, CALL_WORDS[p].month, `${p}: no "per month"`);
+    // Page-wide: a currency sign next to a figure, or a currency code (the terminal example shows a "$" prompt, no figure).
+    assert.doesNotMatch(prose(html), /[$€£₹]\s?\d|\d\s?[$€£₹]|US\$|R\$|\b(?:usd|eur|inr|brl)\b/i, `${p}: no price anywhere on the page`);
+    marks.push(mark(cards[1]));
+  }
+  const en = pricingOf(index());
+  assert.deepEqual([...en.matchAll(/<p class="n">([^<]+)<\/p><h3>([^<]+)<\/h3>/g)].map((m) => [m[1], m[2]]), [['Free', 'Core'], ['Coming soon', 'Solo'], ['Coming soon', 'Team']]);
+  for (const t of ['board', 'online sheet', 'cost alerts', 'Everything in Solo', 'premium modules', 'several signers', 'support', 'The price is published before anything is charged.', 'No card needed to start.']) assert.ok(en.includes(t), t);
+  assert.doesNotMatch(en, /Onboarding/);
+  assert.equal(marks.length, 4);
+});
+
+test('ORD-0036 B.2: the neutral call button: four per page (header, hero, Get started, phone bar), one text, one subject', () => {
+  for (const [p] of LANGS) {
+    const html = read(p);
+    const w = CALL_WORDS[p];
+    const parts = { header: /<header[\s\S]*?<\/header>/.exec(html)[0], hero: /<section class="view hero"[\s\S]*?<\/section>/.exec(html)[0], start: /<section class="view" id="start"[\s\S]*?<\/section>/.exec(html)[0], bar: /<div class="cta-bar">[\s\S]*?<\/div>/.exec(html)[0] };
+    for (const [name, part] of Object.entries(parts)) assert.ok(part.includes(`${CALL}>${w.text}</a>`), `${p}: the call button in the ${name}`);
+    assert.equal(html.split(CALL).length - 1, 4, `${p}: four call buttons`);
+    assert.equal(html.split(`>${w.text}</a>`).length - 1, 4, `${p}: the same text on the four`);
+    assert.doesNotMatch(html, /subject=30-minute%20(?!call")/, `${p}: no other 30-minute subject`);
+    assert.doesNotMatch(html, w.old, `${p}: the old button word is gone, the script text included`);
+  }
 });
