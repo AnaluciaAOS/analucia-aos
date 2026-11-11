@@ -1,5 +1,7 @@
 # Putting the website online
 
+Current zip: built on 2026-11-10 from commit `ebf43d0` (the `site/` folder as it is in that commit).
+
 For the owner. The site is five files and three language folders in `site/`. They are packed into one file, `analucia-site.zip`, that you upload to your hosting. It runs on any shared hosting with cPanel (Apache); nothing has to be installed.
 
 Where the zip is: `../analucia-lab/site-release/analucia-site.zip` (next to this repository, never inside it). It holds `index.html`, `privacy.html`, `style.css`, `robots.txt`, `.htaccess` and the folders `es/`, `pt/` and `hi/` (one `index.html` each: Spanish, Portuguese and Hindi), with `index.html` at the top level.
@@ -20,8 +22,9 @@ Open these in a private browser window:
 
 - `http://analuciaaos.com/` shows the page "Hand the work to AI. Keep the decisions."
 - The four links at the top (How it works, What you see, Get started, Talk to us) each move to their part of the page.
-- "Book a 30-minute diagnostic" opens a new email to `hello@analuciaaos.com`. Next to it the address is written out, and "Copy email" copies it and says "Copied" for a moment (for readers without a mail program). On a computer the button stays at the top while you scroll; on a phone it stays in a bar at the bottom.
+- "Book a 30-minute call" opens a new email to `hello@analuciaaos.com`. Next to it the address is written out, and "Copy email" copies it and says "Copied" for a moment (for readers without a mail program). On a computer the button stays at the top while you scroll; on a phone it stays in a bar at the bottom.
 - Under "Get started", each "Copy" button copies its command and says "Copied" for a moment; the six steps of the loop open a short example when you click them.
+- "Pricing" shows three cards: Free, and two marked "Coming soon" (Solo and Team). There is no price anywhere on the page.
 - The language links at the top (English, Español, Português, हिन्दी) open each language page. Check each one:
   - `http://analuciaaos.com/es/index.html` (Spanish), `http://analuciaaos.com/pt/index.html` (Portuguese) and `http://analuciaaos.com/hi/index.html` (Hindi) show the same page in that language, with its colours, a small "under review" notice at the top, and the install commands still in English.
   - The Hindi page shows Devanagari letters, not boxes or question marks.
