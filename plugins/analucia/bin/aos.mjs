@@ -25,6 +25,9 @@
 //   aos hook session-start|session-end|pre-tool-use   read Claude Code hook JSON on stdin (plugin hooks)
 //   aos agents-md sync | aos check-roles         one director: the analucia block in AGENTS.md
 //   aos check-push [remote] [url] | aos install-git-hooks   right GitHub account on push
+//   aos next                            one line: the single thing that comes next and who does it (ORD-0040)
+//   aos launchers install               the owner's click launchers: INICIAR, FIRMAR, DETENER, REANUDAR, IMPORTAR
+//   aos drafts                          the draft orders waiting in .analucia/drafts/ and whether each can be placed
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { createInterface } from 'node:readline/promises';
 import { fileURLToPath } from 'node:url';
@@ -47,9 +50,12 @@ import { evalsReport, runEvals } from '../lib/evals.mjs';
 import { adopt, needsAudit } from '../lib/adopt.mjs';
 import { firstHour, firstHourText, writeFirstHourView } from '../lib/metrics.mjs';
 import { installLauncher, sign } from '../lib/sign.mjs';
+import { DRAFTS_REL, listDrafts, nextOrderId } from '../lib/drafts.mjs';
+import { installLaunchers } from '../lib/launchers.mjs';
+import { nextLine } from '../lib/next.mjs';
 import { ERRORS, withNext } from '../lib/errors.mjs';
 import { renderCommands } from '../lib/cli.mjs';
-import { notInitialisedLine, withRootLine } from '../lib/session-lines.mjs';
+import { withRootLine } from '../lib/session-lines.mjs';
 import { personLocale, supportedLocale } from '../lib/locale.mjs';
 import { formatError, isWarning, validateFile, validateTree } from '../lib/validate.mjs';
 
@@ -84,6 +90,9 @@ const USAGE = [
   '       aos metrics first-hour',
   '       aos pause ORD-NNNN --reason "<why>" | aos resume-order ORD-NNNN',
   '       aos sign | aos sign --install-launcher',
+  '       aos next',
+  '       aos launchers install',
+  '       aos drafts',
   '       aos explain <CODE>',
   '       (every command accepts --root <dir>)',
 ].join('\n');
@@ -224,6 +233,8 @@ function cmdRun({ opts, positional }, root) {
     } else {
       const r = runFinish(root, id, { outcome: opts.outcome, evidence: opts.evidence, blockedBy: opts['blocked-by'], reason: opts.reason, agent: parseAgent(opts) });
       process.stdout.write(`${id}: run finished (${opts.outcome}${r.over_budget ? ', over budget' : ''}), evidence attached, active -> ${r.to}\n`);
+      // ORD-0040 part 5: a warning, never a refusal; the outcome is already recorded.
+      if (r.no_evidencia) process.stdout.write(`warning: ${renderCommands(catalog(ownerLocale(root))('run.no_evidencia', { path: opts.evidence, template: 'plugins/analucia/templates/' }))}\n`);
     }
     return 0;
   } catch (x) {
@@ -249,6 +260,15 @@ function cmdVerify({ positional }, root) {
   }
 }
 
+const askLine = async (question) => {
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  try {
+    return await rl.question(question);
+  } finally {
+    rl.close();
+  }
+};
+
 async function cmdClose({ opts, positional }, root) {
   const isTTY = process.stdin.isTTY === true;
   const ask = async (question) => {
@@ -268,9 +288,13 @@ async function cmdClose({ opts, positional }, root) {
   }
 }
 
-function cmdHalt({ opts }, root) {
+async function cmdHalt({ opts }, root) {
   try {
-    halt(root, { reason: opts.reason, isTTY: process.stdin.isTTY === true });
+    const isTTY = process.stdin.isTTY === true;
+    // ORD-0040 part 4 (DETENER): at a real terminal the reason is asked in the window when it was not given.
+    let reason = opts.reason;
+    if (isTTY && !(reason && reason.trim())) reason = await askLine(catalog(ownerLocale(root))('halt.ask_reason'));
+    halt(root, { reason, isTTY });
     process.stdout.write('halted: every tool call except reads is blocked until the owner runs "aos resume"\n');
     return 0;
   } catch (x) {
@@ -311,13 +335,17 @@ function cmdHook({ opts, positional }) {
   const root = guardRoot(opts, input);
   // ORD-0029 A: SessionStart is never silent. Without a project root it says so, names the folder it searched
   // from, and gives the real command that initialises it. The other hooks stay quiet outside a project.
+  // ORD-0040 part 3: that line is the one `aos next` prints for the same folder.
   if (!root && positional[0] === 'session-start') {
-    process.stdout.write(`${notInitialisedLine(input.cwd ?? process.env.CLAUDE_PROJECT_DIR ?? process.cwd())}\n`);
+    process.stdout.write(`${nextLine(input.cwd ?? process.env.CLAUDE_PROJECT_DIR ?? process.cwd())}\n`);
     return 0;
   }
   if (!root) return 0; // not an Analucia project
   if (positional[0] === 'session-start') {
-    process.stdout.write(withRootLine(sessionStart(root, input), root, input.cwd ?? process.env.CLAUDE_PROJECT_DIR ?? process.cwd()));
+    const text = withRootLine(sessionStart(root, input), root, input.cwd ?? process.env.CLAUDE_PROJECT_DIR ?? process.cwd());
+    // ORD-0040 part 3: the one next step, right under the root line (the same line as `aos next`).
+    const [status, rootLine, ...rest] = text.split('\n');
+    process.stdout.write([status, rootLine, nextLine(root, { explicit: true }), ...rest].join('\n'));
     return 0;
   }
   if (positional[0] === 'session-end') {
@@ -328,7 +356,10 @@ function cmdHook({ opts, positional }) {
   if (positional[0] === 'pre-tool-use') {
     const message = preToolUse(root, input);
     if (!message) return 0;
-    process.stderr.write(`${message}\n`);
+    // ORD-0040 part 2 (OBS-127): a blocked write of an order or a verify file says where a draft goes, and that an
+    // order needs its verify file.
+    const hint = /\.analucia\/(?:orders|verify)\//i.test(message) ? ` ${catalog(ownerLocale(root))('hook.draft_hint', { drafts: DRAFTS_REL })}` : '';
+    process.stderr.write(`${message}${hint}\n`);
     return 2;
   }
   process.stderr.write('usage: aos hook session-start|session-end|pre-tool-use\n');
@@ -508,8 +539,15 @@ async function cmdCeo({ opts, positional }, root) {
       process.stdout.write(`wrote ${r.path} (${r.bytes} bytes; ${r.asks} asks, ${r.orders} orders). Open it in Excel; fill only the yellow cells.\n`);
       return 0;
     }
+    const tty = process.stdin.isTTY === true;
+    // ORD-0040 part 4 (IMPORTAR): the sheet dropped on the launcher, or asked in the window.
+    if (sub === 'import' && !positional[1] && tty) {
+      const typed = (await askLine(catalog(ownerLocale(root))('ceo.ask_path'))).trim().replace(/^["']|["']$/g, '');
+      if (typed) positional[1] = typed;
+    }
+    if (sub === 'import' && !positional[1] && !tty) throw Object.assign(new Error('importing the owner sheet needs the owner at an interactive terminal; stdin is not a TTY (agents cannot import it). The owner drops the sheet on IMPORTAR or runs "aos ceo import <file>" in their own terminal'), { code: 'E_OWNER_TTY' });
     if (sub === 'import' && positional[1]) {
-      const isTTY = process.stdin.isTTY === true;
+      const isTTY = tty;
       const ask = async (question) => {
         const rl = createInterface({ input: process.stdin, output: process.stdout });
         try {
@@ -751,7 +789,48 @@ function cmdBackup({ opts }, root) {
   }
 }
 
+// aos next (ORD-0040 part 3): exactly one line. Without --root it looks from the current folder upwards, as the
+// hooks do; it works in a folder with no .analucia/ (the next step is to start). Exit 0 whenever it could answer.
+function cmdNext({ opts }) {
+  const explicit = typeof opts.root === 'string';
+  process.stdout.write(`${nextLine(explicit ? opts.root : '.', { explicit })}\n`);
+  return 0;
+}
+
+// aos launchers install (ORD-0040 part 4): any role, an agent included. It writes files only; each launcher opens a
+// real console where only a person can answer, so E_OWNER_TTY stays on every owner-only command.
+function cmdLaunchers({ positional }, root) {
+  if (positional[0] !== 'install') {
+    process.stderr.write('usage: aos launchers install\n');
+    return 2;
+  }
+  const t = catalog(ownerLocale(existsSync(`${root}/.analucia/project.json`) ? root : null));
+  for (const { file, status } of installLaunchers(root)) process.stdout.write(`${t('launchers.line', { file, status: t(`status.${status}`) })}\n`);
+  process.stdout.write(`${t('launchers.done')}\n`);
+  return 0;
+}
+
+// aos drafts (ORD-0040 part 2): the drafts waiting and whether each can be placed. Read-only, any role.
+// Exit 0 when every draft is ready (or there is none), 1 when at least one is not.
+function cmdDrafts(_args, root) {
+  const t = catalog(ownerLocale(root));
+  const drafts = listDrafts(root);
+  if (!drafts.length) {
+    process.stdout.write(`${t('drafts.none', { id: nextOrderId(root), dir: DRAFTS_REL })}\n`);
+    return 0;
+  }
+  for (const d of drafts) {
+    process.stdout.write(`${d.ok ? t('drafts.ready', { id: d.id, title: d.title }) : t('drafts.not_ready', { id: d.id })}\n`);
+    for (const p of d.problems) process.stdout.write(`    - ${p}\n`);
+  }
+  process.stdout.write(`${t('drafts.footer', { id: nextOrderId(root) })}\n`);
+  return drafts.every((d) => d.ok) ? 0 : 1;
+}
+
 const commands = {
+  next: cmdNext,
+  launchers: cmdLaunchers,
+  drafts: cmdDrafts,
   backup: cmdBackup,
   review: cmdReview,
   workflow: cmdWorkflow,

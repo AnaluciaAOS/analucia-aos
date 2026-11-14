@@ -12,7 +12,8 @@ Who acts: `director`
 
 1. `node plugins/analucia/bin/aos.mjs agents-md sync` (rewrites only the analucia block).
 2. Duplicated block: delete the extra copy by hand, then sync.
-3. Then `node plugins/analucia/bin/aos.mjs check-roles` must exit 0.
+3. CLAUDE.md with director instructions: the owner double-clicks INICIAR (`node plugins/analucia/bin/aos.mjs init`). Its plan shows that the whole file moves to `CLAUDE.previous.md` and that CLAUDE.md will hold only `@AGENTS.md`; it is moved only after the owner types `CONFIRM` (AMD-0013). A check or a dry run never moves it.
+4. Then `node plugins/analucia/bin/aos.mjs check-roles` must exit 0.
 
 ## Patterns
 

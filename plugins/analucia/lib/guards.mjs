@@ -260,6 +260,13 @@ export function agentsMdSync(root, { dryRun = false } = {}) {
   return { changed, created: changed && !existed, claudeCreated };
 }
 
+// The lines of a CLAUDE.md that are director instructions (the E_ROLES conflict): anything but the import line
+// that names the director or carries a marker of the Analucia block. One definition, shared by check-roles, the
+// plan of aos init and aos init --check (AMD-0013 Change 1).
+export function directorLines(text) {
+  return String(text).replace(/\r\n/g, '\n').split('\n').filter((l) => l.trim() !== '@AGENTS.md' && (/\bdirector\b/i.test(l) || l.includes(BEGIN) || l.includes(END)));
+}
+
 export function checkRoles(root) {
   const problems = [];
   const a = join(root, 'AGENTS.md');
@@ -280,8 +287,8 @@ export function checkRoles(root) {
   else {
     const lines = readFileSync(c, 'utf8').replace(/\r\n/g, '\n').split('\n');
     if (!lines.some((l) => l.trim() === '@AGENTS.md')) problems.push('CLAUDE.md does not import "@AGENTS.md": add that line');
-    const director = lines.filter((l) => l.trim() !== '@AGENTS.md' && (/\bdirector\b/i.test(l) || l.includes(BEGIN) || l.includes(END)));
-    if (director.length) problems.push(`CLAUDE.md contains director instructions (${director.length} line(s), e.g. ${JSON.stringify(director[0].trim().slice(0, 60))}); the executor entrypoint holds only "@AGENTS.md". Move them to the director's own entrypoint`);
+    const director = directorLines(lines.join('\n'));
+    if (director.length) problems.push(`CLAUDE.md contains director instructions (${director.length} line(s), e.g. ${JSON.stringify(director[0].trim().slice(0, 60))}); the executor entrypoint holds only "@AGENTS.md". Move them to the director's own entrypoint: the owner double-clicks INICIAR ("aos init"), whose plan moves the whole file to CLAUDE.previous.md after CONFIRM`);
   }
   // AMD-0007 §1: a review decision written by anyone but the owner (for example by hand, with a valid chain).
   if (existsSync(logPath(root))) {

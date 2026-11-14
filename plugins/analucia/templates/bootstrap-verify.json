@@ -1,0 +1,9 @@
+{
+  "order": "ORD-0001",
+  "checks": [
+    { "name": "the report exists and ends with an outcome", "run": "tail -1 .analucia/evidence/ORD-0001/report.md | grep -q '^OUTCOME: '", "expect_exit": 0 },
+    { "name": "the rules files are tracked", "run": "git ls-files --error-unmatch AGENTS.md CLAUDE.md > /dev/null", "expect_exit": 0 },
+    { "name": "the commit of this order is on the remote", "run": "test -n \"$(git branch -r --contains {order_commit})\"", "expect_exit": 0 },
+    { "name": "every commit up to the commit of this order is on the remote", "run": "test -z \"$(git rev-list {order_commit} --not --remotes)\"", "expect_exit": 0 }
+  ]
+}

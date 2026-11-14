@@ -39,7 +39,9 @@ test('a folder that is not initialised gets one line: installed, not initialised
   const lines = r.stdout.trimEnd().split('\n');
   assert.equal(lines.length, 1, r.stdout);
   assert.ok(lines[0].includes(posix(bare)), 'names the folder it searched from');
-  assert.ok(lines[0].endsWith(`node "${AOS_BIN}" init`), 'ends with the command, as it exists on this machine');
+  // ORD-0040 part 3: the hook shows the line of `aos next`; in a folder that is not initialised the first step is the
+  // command that writes the owner's click launchers (then the owner double-clicks INICIAR).
+  assert.ok(lines[0].endsWith(`node "${AOS_BIN}" launchers install`), 'ends with the command, as it exists on this machine');
   assert.ok(existsSync(AOS_BIN));
   assert.match(lines[0], /installed, but this folder is not initialised|está instalado, pero esta carpeta no está iniciada|instalado, mas esta pasta não foi iniciada|इंस्टॉल है|已安装/);
   // The other hooks stay quiet outside a project, and nothing is written there.

@@ -6,7 +6,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSy
 import { homedir } from 'node:os';
 import { basename, extname, join, relative, resolve, sep } from 'node:path';
 import { accountFixes, aosCommand, forceAccountCommand, githubSlug, installCommands, installFor, pluginInstall, renderCommands } from './cli.mjs';
-import { secretPatterns, urlUser } from './guards.mjs';
+import { directorLines, secretPatterns, urlUser } from './guards.mjs';
 import { appendEvent, isoWithOffset, projectTimeZone, readLog } from './log.mjs';
 import { personLocale } from './locale.mjs';
 import { LOCALES, catalog } from './onboarding.mjs';
@@ -136,6 +136,13 @@ export function runChecks(root, { lsRemote: ls = lsRemote, now = new Date(), ins
     const repo = slug ? `${slug.owner}/${slug.repo}` : owner ? `${owner}/${folder}` : folder;
     add('cloud_access', 'WARN', { key: 'cloud_access.warn', vars: { repo } }, { who: 'owner', key: 'cloud_access.next', vars: { repo } });
   }
+
+  // claude_md (AMD-0013 Change 1, AMD-0014 §1): only when CLAUDE.md has director instructions. A check never
+  // moves anything: the conflict is a FAIL, and its next step is the owner's click on INICIAR, whose plan shows the
+  // move and applies it after CONFIRM.
+  const claudePath = join(root, 'CLAUDE.md');
+  const conflict = existsSync(claudePath) ? directorLines(readFileSync(claudePath, 'utf8')) : [];
+  if (conflict.length) add('claude_md', 'FAIL', { key: 'claude_md.fail', vars: { lines: conflict.length } }, { who: 'owner', key: 'claude_md.next', vars: { cmds: cmds([`${aosCommand()} init`]) } });
 
   // secrets_tracked (Q-101): file and line, never the value
   const tracked = isRepo ? git(root, ['ls-files', '-z']).stdout.split('\0').filter(Boolean) : [];

@@ -184,8 +184,9 @@ test('the launcher files are written, run aos sign, and contain no absolute pers
   assert.match(r.stdout, /FIRMAR\.cmd: created\. Double-click it to sign\.\nFIRMAR\.sh: created\./);
   const cmd = readFileSync(join(root, 'FIRMAR.cmd'), 'utf8');
   const sh = readFileSync(join(root, 'FIRMAR.sh'), 'utf8');
-  assert.match(cmd, /node "%AOS%" sign/);
-  assert.match(sh, /node "\$AOS" sign/);
+  // ORD-0040 part 4: FIRMAR comes from the one launcher template (lib/launchers.mjs).
+  assert.match(cmd, /" "%~dp0\." sign\r\n/);
+  assert.match(sh, /" "\$PWD" sign\n/);
   assert.match(cmd, /\r\n/, 'Windows line endings for the .cmd');
   for (const text of [cmd, sh]) {
     for (const personal of [homedir(), homedir().replace(/\\/g, '/'), root, root.replace(/\\/g, '/'), tmpdir()]) assert.ok(!text.includes(personal), `contains ${personal}`);

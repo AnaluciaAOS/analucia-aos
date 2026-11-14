@@ -4,7 +4,8 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { agentsMdSync, installGitHooks, secretPatterns } from './guards.mjs';
+import { bootstrapDraftPlan, directorEntryPlan } from './drafts.mjs';
+import { agentsMdSync, directorLines, installGitHooks, secretPatterns } from './guards.mjs';
 import { checklistText, hostingTable, parseHosting } from './hosting.mjs';
 import { appendEvent, readLog, timestampFor } from './log.mjs';
 import { permissionsWrite } from './permissions.mjs';
@@ -181,6 +182,19 @@ function claudeMdPlan(root) {
   const p = join(root, 'CLAUDE.md');
   if (!existsSync(p)) return { item: 'claude_md', status: 'created', apply: () => { if (!existsSync(p)) writeFileSync(p, '@AGENTS.md\n'); } };
   const text = readFileSync(p, 'utf8');
+  // AMD-0013 Change 1 (spec text: AMD-0014 §1): a CLAUDE.md with director instructions is the E_ROLES conflict.
+  // The plan shows that the whole previous file moves to CLAUDE.previous.md (a numbered name if that one exists)
+  // and that CLAUDE.md will hold only "@AGENTS.md". Like every other item it is applied only after the owner's
+  // CONFIRM; a dry run and aos init --check never move anything. The bytes are moved as they are: no line is lost.
+  const director = directorLines(text);
+  if (director.length) {
+    let to = 'CLAUDE.previous.md';
+    for (let n = 2; existsSync(join(root, to)); n++) to = `CLAUDE.previous.${n}.md`;
+    return {
+      item: 'claude_md', status: 'updated', note: { key: 'plan.claude_move', vars: { to, lines: director.length } },
+      apply: () => { writeFileSync(join(root, to), readFileSync(p)); writeFileSync(p, '@AGENTS.md\n'); },
+    };
+  }
   if (text.replace(/\r\n/g, '\n').split('\n').some((l) => l.trim() === '@AGENTS.md')) return { item: 'claude_md', status: 'unchanged', apply: () => {} };
   // Adoption-safe: the import line is added on top; nothing else is touched (SPEC-0005 §4.3).
   const eol = text.includes('\r\n') ? '\r\n' : '\n';
@@ -194,6 +208,19 @@ function gitattributesPlan(root) {
   const has = text.replace(/\r\n/g, '\n').split('\n').some((l) => l.trim() === LF_RULE);
   const next = has ? text : `${text}${text && !text.endsWith('\n') ? '\n' : ''}${LF_RULE}\n`;
   return { item: 'gitattributes', status: statusOf(existed, !has), apply: () => { if (!has) writeFileSync(p, next); } };
+}
+
+// .gitignore: the generated views and the turn of the single log writer are never committed (ORD-0040 part 1).
+const IGNORE_RULES = ['.analucia/views/', '.analucia/events.jsonl.lock*'];
+function gitignorePlan(root) {
+  const p = join(root, '.gitignore');
+  const existed = existsSync(p);
+  const text = existed ? readFileSync(p, 'utf8') : '';
+  const have = text.replace(/\r\n/g, '\n').split('\n').map((l) => l.trim());
+  const missing = IGNORE_RULES.filter((r) => !have.includes(r));
+  const eol = text.includes('\r\n') ? '\r\n' : '\n';
+  const next = `${text}${text && !text.endsWith('\n') ? eol : ''}${missing.map((r) => `${r}${eol}`).join('')}`;
+  return { item: 'gitignore', status: statusOf(existed, missing.length > 0), apply: () => { if (missing.length) writeFileSync(p, next); } };
 }
 
 function directorScopePlan(root) {
@@ -234,7 +261,11 @@ export function configPlan(root, answers, { locale }) {
     items.push({ item: 'git_hooks', status: 'skipped', apply: () => {} });
   }
   items.push(gitattributesPlan(root));
+  items.push(gitignorePlan(root));
   items.push(directorScopePlan(root));
+  // ORD-0040 part 2: the director's entrypoint, and the first order already written when commits predate the Loop.
+  items.push(directorEntryPlan(root));
+  items.push(bootstrapDraftPlan(root));
   return items;
 }
 
@@ -269,7 +300,10 @@ export function planText(t, resolved, items, secrets, { now = new Date(), wizard
     out.push('');
   }
   out.push(t('plan.config'));
-  for (const i of items) out.push(`  ${t(`item.${i.item}`)}: ${t(`status.${i.status}`)}`);
+  for (const i of items) {
+    out.push(`  ${t(`item.${i.item}`)}: ${t(`status.${i.status}`)}`);
+    if (i.note) out.push(`    ! ${t(i.note.key, i.note.vars)}`);
+  }
   for (const s of secrets) out.push('', `  ! ${t('notice.secret_in_artifact', s)}`);
   if (!wizard) out.push('', hostingTable(t, { now }));
   if (parseHosting(resolved.answers.hosting.value).choice === 'own-server') out.push('', checklistText(t));

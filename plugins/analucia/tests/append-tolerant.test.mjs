@@ -60,11 +60,11 @@ test('the new event itself is still validated, and a broken chain still refuses 
   assert.throws(() => appendEvent(root, { type: 'operation.logged', actor: 'owner', subject: null, payload: { operation: 'x' } }), (x) => x.code === 'E_CHAIN');
 });
 
-test('the plugin version reads 0.3.0 everywhere it is declared', () => {
+test('the plugin version reads 0.4.0 everywhere it is declared', () => {
   const plugin = fileURLToPath(new URL('..', import.meta.url));
-  assert.equal(JSON.parse(readFileSync(join(plugin, '.claude-plugin', 'plugin.json'), 'utf8')).version, '0.3.0');
+  assert.equal(JSON.parse(readFileSync(join(plugin, '.claude-plugin', 'plugin.json'), 'utf8')).version, '0.4.0');
   const index = readFileSync(join(plugin, 'docs', 'INDEX.md'), 'utf8').split(/\r?\n/); // a CRLF checkout (core.autocrlf) is the same file
-  assert.equal(index[0], 'analucia docs for plugin version 0.3.0');
-  assert.match(index[2], /plugin `analucia` 0\.3\.0$/);
-  assert.match(readFileSync(join(plugin, 'README.md'), 'utf8'), /version 0\.3\.0\./);
+  assert.equal(index[0], 'analucia docs for plugin version 0.4.0');
+  assert.match(index[2], /plugin `analucia` 0\.4\.0$/);
+  assert.match(readFileSync(join(plugin, 'README.md'), 'utf8'), /version 0\.4\.0\./);
 });

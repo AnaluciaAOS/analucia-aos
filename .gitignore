@@ -15,3 +15,6 @@ Desktop.ini
 .idea/
 *.swp
 *~
+
+# The turn of the single log writer (ORD-0040): it lives for milliseconds and is never committed.
+.analucia/events.jsonl.lock*

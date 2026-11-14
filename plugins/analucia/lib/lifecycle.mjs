@@ -166,6 +166,9 @@ export function resumeOrder(root, id, { now = new Date(), agent } = {}) {
   return { run: attempts + 1, budget, line };
 }
 
+export const EVIDENCIA_HEADING = '## Evidencia';
+export const hasEvidenciaSection = (text) => /^## Evidencia\s*$/m.test(String(text).replace(/\r\n/g, '\n'));
+
 const NEXT_STATE = { done: 'delivered', blocked: 'blocked', needs_decision: 'blocked', budget_exhausted: 'queued', failed: 'queued' };
 
 export function runFinish(root, id, { outcome, evidence, blockedBy, reason, now = new Date(), agent } = {}) {
@@ -193,7 +196,15 @@ export function runFinish(root, id, { outcome, evidence, blockedBy, reason, now 
     change.reason = reason ?? `run finished with outcome ${outcome}; queued for another attempt`;
   }
   appendEvent(root, { type: 'order.state_changed', actor: 'executor', subject: id, agent, payload: change }, { now });
-  return { to, over_budget: Boolean(payload.over_budget), minutes };
+  // ORD-0040 part 5 (SDG-001, phase 1): a report delivered as done carries the fixed section "## Evidencia". Its
+  // absence is a warning for the caller to print, never a refusal: the outcome above is already recorded.
+  let noEvidencia = false;
+  if (outcome === 'done') {
+    try {
+      noEvidencia = !hasEvidenciaSection(readFileSync(join(root, evidence), 'utf8'));
+    } catch { /* the evidence is a folder or cannot be read as text: nothing to warn about */ }
+  }
+  return { to, over_budget: Boolean(payload.over_budget), minutes, no_evidencia: noEvidencia };
 }
 
 // Git Bash on Windows (never the WSL launcher in System32), plain bash elsewhere.

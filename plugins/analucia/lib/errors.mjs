@@ -27,6 +27,7 @@ export const ERRORS = {
   E_ID_MISMATCH: { who: 'director', next: 'Make the id (or order) field equal the file name without its extension.' },
   E_JSON: { who: 'director', next: 'Fix the JSON syntax at the line named in the message (project.json, a verify file, the lock, or one event line).' },
   E_KIND_ENUM: { who: 'director', next: 'Set kind to one of the order_kinds in plugins/analucia/core/enums.json.' },
+  E_LOG_BUSY: { who: 'executor', next: 'Run the same command again in a moment; if it still fails, check that no other aos command is running in this project and tell the director.' },
   E_MISSING_FIELD: { who: 'director', next: 'Add the required field named in the message and run aos validate again.' },
   E_MOVING_REF: { who: 'director', next: 'Replace the moving ref named in the message (HEAD, a branch or a remote ref) with a commit SHA or {order_commit} in the verify file, then run aos validate again.' },
   E_NOT_CONFIRMED: { who: 'owner', next: 'Run aos close again in your terminal and type CLOSE exactly to sign.' },

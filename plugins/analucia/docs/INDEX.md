@@ -1,6 +1,6 @@
-analucia docs for plugin version 0.3.0
+analucia docs for plugin version 0.4.0
 
-# Analucia AOS docs — plugin `analucia` 0.3.0
+# Analucia AOS docs — plugin `analucia` 0.4.0
 
 Read the docs of this version, not what you remember. Run commands as `node plugins/analucia/bin/aos.mjs <command>` from the repo root.
 
@@ -30,7 +30,7 @@ Read the docs of this version, not what you remember. Run commands as `node plug
 - `aos close ORD-NNNN --as director` — director, risk: low only: verified → closed without a TTY (SPEC-0003 §4)
 - `aos ask open ASK-NNNN` — director: record.created + ask.opened for a locked .analucia/asks/ASK-NNNN.md (SPEC-0004 §1)
 - `aos ceo export [--out <path>] [--locale en|es]` — any: write the owner sheet (.xlsx): How to use, Asks, Orders, States (SPEC-0004 §2)
-- `aos ceo import <path>` — owner, own TTY: record the sheet: ask decisions and close sign-offs, after typing CONFIRM; all-or-nothing
+- `aos ceo import [<path>]` — owner, own TTY (without a path it is asked in the window: IMPORTAR): record the sheet: ask decisions and close sign-offs, after typing CONFIRM; all-or-nothing
 - `aos init [--locale en|pt|zh-Hans|hi|es] [--answers <file> [--dry-run]]` — owner, own TTY (dry run: anyone): guided onboarding: three moments, safe defaults, then the configuration of SPEC-0005 §4 after CONFIRM
 - `aos init --hosting managed|own-server|"already: <where>"|later [--dry-run]` — owner, own TTY (dry run: anyone): change only the hosting answer: project.json hosting, a hosting.chosen event; the plan shows the dated cost table (AMD-0006)
 - `aos init --check` — any: the setup checks of SPEC-0005 §5 (PASS/WARN/FAIL, each WARN/FAIL with next); records the inventory; saves .analucia/views/onboarding.md; exit 1 on any FAIL
@@ -39,7 +39,7 @@ Read the docs of this version, not what you remember. Run commands as `node plug
 - `aos admit ORD-NNNN` — director: lists the open orders (addendum before new order, AMD-0007 §4), then record.created with version pins, draft → ready → queued (SPEC-0003 §5)
 - `aos cost record --usd <n> --source "<text>" [--order ORD-NNNN] [--month YYYY-MM]` — director (or owner): log a cost; threshold alerts at 50/80/100% inform the owner and never block
 - `aos cost status [--month YYYY-MM]` — any: budget, spend, percent, alerts and cost per closed order
-- `aos halt --reason "<text>" / aos resume` — owner, own TTY: the off switch (.analucia/HALT)
+- `aos halt --reason "<text>" / aos resume` — owner, own TTY: the off switch (.analucia/HALT); without --reason, at a terminal, the reason is asked in the window (DETENER)
 - `aos check-writeback` — hook (Stop, PreCompact): exit 2 while a run is open or the chain is broken
 - `aos hook session-start` — hook (SessionStart): derive, print resume.md, record role.declared and session.start
 - `aos hook pre-tool-use` — hook (PreToolUse): block tools under HALT and writes to protected paths
@@ -52,8 +52,11 @@ Read the docs of this version, not what you remember. Run commands as `node plug
 - `aos metrics first-hour` — any: the owner first hour from the log only (AMD-0004): started, first_closed, elapsed, status; refreshes .analucia/views/first-hour.md (also written by aos derive)
 - `aos pause ORD-NNNN --reason "<why>"` — executor: close the open run as blocked and move active -> paused (AMD-0005 §2)
 - `aos resume-order ORD-NNNN` — executor: paused -> active with a new run, within the attempt budget
-- `aos sign` — owner, own TTY: documents waiting for review first (approve, comment, reject, open; AMD-0007), then verify every delivered order, show results and evidence, close what passed after typing CLOSE, record owner.signed, commit and push the sign-off (AMD-0005 §3)
+- `aos sign` — owner, own TTY: draft orders waiting to be placed first (PLACE; ORD-0040), then documents waiting for review (approve, comment, reject, open; AMD-0007), then verify every delivered order, show results and evidence, close what passed after typing CLOSE, record owner.signed, commit and push the sign-off (AMD-0005 §3)
 - `aos sign --install-launcher` — owner: write FIRMAR.cmd and FIRMAR.sh in the project root: double-click to sign
+- `aos next` — any: exactly one line: the single thing that comes next and who does it, in the project language, with the click or the command as it exists on this machine; works in a folder with no .analucia/; writes nothing; the SessionStart hook shows the same line (ORD-0040)
+- `aos launchers install` — any role, an agent included (files only): write the owner click launchers INICIAR (`aos init`), FIRMAR (`aos sign`), DETENER (`aos halt`), REANUDAR (`aos resume`) and IMPORTAR (`aos ceo import`) as .cmd and .sh in the project root; each finds the plugin through CLAUDE_CONFIG_DIR and takes the installed version by numeric order (ORD-0040)
+- `aos drafts` — any: the draft orders in .analucia/drafts/ (ORD-NNNN.md with its verify file ORD-NNNN.json), whether each can be placed and why not, and the next free ID; exit 1 while one is not ready. The owner places the ready ones in `aos sign` by typing PLACE: the tool copies them to the protected paths, writes their hashes in director.lock and admits them (ORD-0040)
 - `aos review request <path> --order ORD-NNNN` — executor: register a document (plan, design, mockup) for the owner: review.requested with its sha256 (AMD-0007 §1)
 - `aos workflow check ORD-NNNN` — any (verify files): exit 0 when design.md and plan.md of a workflow: qrspi order have a current approve (AMD-0007 §3)
 - `aos hook session-end` — hook (SessionEnd): session.end with the session id and reason; never blocks (AMD-0007 §2)
@@ -63,6 +66,9 @@ Read the docs of this version, not what you remember. Run commands as `node plug
 
 ## Pages for the owner
 
+- [CLOSING-TEST.md](CLOSING-TEST.md) — one page of clicks: from a new empty folder to a signed order, without typing a command (ORD-0040)
+- `plugins/analucia/templates/report.md` — the order report, with its fixed section `## Evidencia` (ORD-0040 part 5)
+- `plugins/analucia/templates/director-entry.md`, `bootstrap-order.md`, `bootstrap-verify.json` — what `aos init` leaves for the director: `.analucia/DIRECTOR.md`, and the first order as a draft when commits predate the Loop (ORD-0040 part 2)
 - [HUMAN-LAYER.md](HUMAN-LAYER.md) — reviewing documents in aos sign, interrupted sessions, QRSPI orders, open orders before a new one (AMD-0007)
 - [hosting/VPS-CHECKLIST.md](hosting/VPS-CHECKLIST.md) — own server: the checklist (AMD-0006)
 - `plugins/analucia/templates/workflow-qrspi.md` — the QRSPI template (AMD-0007 §3)
@@ -107,6 +113,7 @@ Read the docs of this version, not what you remember. Run commands as `node plug
 - [E_ID_MISMATCH](errors/E_ID_MISMATCH.md) — next (director): Make the id (or order) field equal the file name without its extension.
 - [E_JSON](errors/E_JSON.md) — next (director): Fix the JSON syntax at the line named in the message (project.json, a verify file, the lock, or one event line).
 - [E_KIND_ENUM](errors/E_KIND_ENUM.md) — next (director): Set kind to one of the order_kinds in plugins/analucia/core/enums.json.
+- [E_LOG_BUSY](errors/E_LOG_BUSY.md) — next (executor): Run the same command again in a moment; if it still fails, check that no other aos command is running in this project and tell the director.
 - [E_MISSING_FIELD](errors/E_MISSING_FIELD.md) — next (director): Add the required field named in the message and run aos validate again.
 - [E_MOVING_REF](errors/E_MOVING_REF.md) — next (director): Replace the moving ref named in the message (HEAD, a branch or a remote ref) with a commit SHA or {order_commit} in the verify file, then run aos validate again.
 - [E_NOT_CONFIRMED](errors/E_NOT_CONFIRMED.md) — next (owner): Run aos close again in your terminal and type CLOSE exactly to sign.
