@@ -142,6 +142,7 @@ function interactiveInit(root, env, answer) {
 const wizardAnswer = (refuse) => (prompt) => {
   if (/Type CONFIRM to apply: $/.test(prompt)) return refuse ? 'no' : 'CONFIRM';
   if (/Your answers:/.test(prompt)) return '';
+  if (/2 to 5 capital letters/.test(prompt)) return ''; // the code question (AMD-0015 §8): Enter, no code for now
   return '1';
 };
 

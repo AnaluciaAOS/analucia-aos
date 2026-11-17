@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { enums } from './enums.mjs';
 import { checkLock, hashLF, readLock } from './lock.mjs';
 import { appendEvent, readLog, timestampFor } from './log.mjs';
+import { declaredDirector } from './session-names.mjs';
 import { RuleError, replay } from './state.mjs';
 import { parseFrontMatter, validateOrderText, validateVerifyText } from './validate.mjs';
 import { ORDER_COMMIT, readBranches, resolveOrderCommit, resolveRun, usesOrderCommit } from './verify-refs.mjs';
@@ -48,6 +49,56 @@ export function specVersions(root) {
   return out;
 }
 
+// ---------- preflight (ORD-0041 part 4, AMD-0015 §4) ----------
+
+// The verify file of an order: the placed one, or the draft's while the order is still a draft. Null when neither exists.
+export function verifyFileOf(root, id) {
+  for (const rel of [`.analucia/verify/${id}.json`, `.analucia/drafts/${id}.json`]) if (existsSync(join(root, rel))) return rel;
+  return null;
+}
+
+// Runs the `preflight` checks of the order's verify file on the tree as it is. It changes no state and writes no
+// event: only its output, under the order's evidence folder. Returns { has: false } when the verify file has no
+// preflight, else { has: true, results, passed, failed: [names], evidence }.
+export function runPreflight(root, id, { now = new Date(), onCheck = () => {}, optional = false } = {}) {
+  const rel = verifyFileOf(root, id);
+  // An order admitted or started without a verify file has no start condition to try: as before this part.
+  if (!rel && optional) return { has: false, file: null };
+  if (!rel) throw new RuleError('E_FILE_MISSING', `${id} has no verify file (.analucia/verify/${id}.json, or .analucia/drafts/${id}.json for a draft)`);
+  const text = readFileSync(join(root, rel), 'utf8');
+  const schema = validateVerifyText(text, `${id}.json`);
+  if (schema.length) throw new RuleError(schema[0].code, `${rel}: ${schema[0].message}`);
+  const { preflight } = JSON.parse(text);
+  if (!preflight) return { has: false, file: rel };
+  const bash = findBash();
+  const report = [`# aos preflight ${id} at ${timestampFor(root, now)}`, '', `verify file: ${rel}`, `shell: ${bash}`, ''];
+  const results = preflight.map((c, i) => {
+    const r = spawnSync(bash, ['-c', c.run], { cwd: root, encoding: 'utf8', timeout: 15 * 60000, maxBuffer: 64 * 1024 * 1024 });
+    const exit = r.status ?? -1;
+    const result = { name: c.name, exit, expect_exit: c.expect_exit, passed: exit === c.expect_exit };
+    onCheck(result);
+    report.push(`## preflight ${i + 1}: ${c.name}`, '', `$ ${c.run}`, `exit ${exit} (expected ${c.expect_exit}): ${result.passed ? 'PASS' : 'FAIL'}`, '', '```', `${(r.stdout ?? '') + (r.stderr ?? '') + (r.error ? `\n${r.error.message}` : '')}`.trimEnd(), '```', '');
+    return result;
+  });
+  const failed = results.filter((r) => !r.passed).map((r) => r.name);
+  report.push(`result: ${failed.length ? `FAILED (${failed.length} of ${results.length})` : `all ${results.length} preflight checks passed`}`);
+  const dir = join(root, '.analucia', 'evidence', id);
+  mkdirSync(dir, { recursive: true });
+  const n = readdirSync(dir).filter((f) => /^preflight-\d+\.txt$/.test(f)).length + 1;
+  const evidence = `.analucia/evidence/${id}/preflight-${String(n).padStart(2, '0')}.txt`;
+  writeFileSync(join(root, evidence), `${report.join('\n')}\n`);
+  return { has: true, file: rel, results, passed: failed.length === 0, failed, evidence };
+}
+
+// For admit and run start: the preflight must pass, else E_PREFLIGHT_FAILED with the failing checks.
+export function requirePreflight(root, id, opts = {}) {
+  const p = runPreflight(root, id, opts);
+  if (p.has && !p.passed) {
+    throw Object.assign(new RuleError('E_PREFLIGHT_FAILED', `${p.failed.length} of ${p.results.length} preflight check(s) failed: ${p.failed.join(', ')}; see ${p.evidence}. Nothing was started or recorded`), { preflight: p });
+  }
+  return p;
+}
+
 // aos admit (SPEC-0003 §5): the director admits a locked, valid order and pins the versions it is governed by.
 export function admit(root, id, { now = new Date(), pluginVersion = currentPluginVersion() } = {}) {
   const rel = `.analucia/orders/${id}.md`;
@@ -66,11 +117,13 @@ export function admit(root, id, { now = new Date(), pluginVersion = currentPlugi
   }
   const { events } = readLog(root);
   if (replay(events).records[id]) throw new RuleError('E_RECORD_EXISTS', `${id} already exists in the event log`);
+  // ORD-0041 part 4 (AMD-0015 §4): the start conditions of the order are tried before it is admitted.
+  const preflight = requirePreflight(root, id, { now, optional: true });
   const pins = { plugin: pluginVersion, specs: specVersions(root) };
   appendEvent(root, { type: 'record.created', actor: 'director', subject: id, payload: { pins } }, { now });
   appendEvent(root, { type: 'order.state_changed', actor: 'director', subject: id, payload: { from: 'draft', to: 'ready' } }, { now });
   appendEvent(root, { type: 'order.state_changed', actor: 'director', subject: id, payload: { from: 'ready', to: 'queued' } }, { now });
-  return { pins };
+  return { pins, preflight };
 }
 
 // High risk: the order names .analucia/rollback/ORD-NNNN.md, the file exists and the lock lists it.
@@ -105,9 +158,17 @@ const openRun = (events, id) => {
   return open;
 };
 
+// ORD-0041 part 5 (AMD-0015 §5): a session that declared the role director never owns a run and cannot start one.
+function refuseDirectorRun(root, agent, events, what) {
+  if (agent?.session && declaredDirector(root, agent.session, events)) {
+    throw new RuleError('E_DIRECTOR_RUN', `this session declared the role director and cannot ${what}: a director never executes an order. Nothing was started`);
+  }
+}
+
 export function runStart(root, id, { now = new Date(), agent } = {}) {
   const budget = readOrderBudget(root, id);
   const { events } = readLog(root);
+  refuseDirectorRun(root, agent, events, 'start a run');
   const order = replay(events).orders[id];
   if (!order) throw new RuleError('E_TRANSITION', `${id} has no record.created event; the director must create and queue it`);
   if (order.state !== 'queued') throw new RuleError('E_TRANSITION', `${id} is "${order.state}"; "run start" needs "queued"`);
@@ -128,6 +189,9 @@ export function runStart(root, id, { now = new Date(), agent } = {}) {
     payload.version_skew = { pinned: pins.plugin, current };
     warnings.push(`${id} was admitted with plugin ${pins.plugin}; running with ${current}. It stays governed by its pins (SPEC-0003 §5)`);
   }
+  // ORD-0041 part 4 (AMD-0015 §4): the preflight runs again. When a check fails nothing starts: no run.started is
+  // written and no attempt is consumed, so a missing prerequisite never costs an attempt.
+  requirePreflight(root, id, { now, optional: true });
   appendEvent(root, { type: 'order.state_changed', actor: 'executor', subject: id, agent, payload: { from: 'queued', to: 'active' } }, { now });
   const { line } = appendEvent(root, { type: 'run.started', actor: 'executor', subject: id, agent, payload }, { now });
   return { run: attempts + 1, budget, line, tier, warnings };
@@ -154,6 +218,7 @@ export function pauseOrder(root, id, { reason, now = new Date(), agent } = {}) {
 export function resumeOrder(root, id, { now = new Date(), agent } = {}) {
   const budget = readOrderBudget(root, id);
   const { events } = readLog(root);
+  refuseDirectorRun(root, agent, events, 'resume a run');
   const order = replay(events).orders[id];
   if (!order || order.state !== 'paused') throw new RuleError('E_TRANSITION', `${id} is "${order?.state ?? 'unknown'}"; "aos resume-order" needs "paused"`);
   const attempts = runsOf(events, id).length;

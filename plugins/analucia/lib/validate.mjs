@@ -3,7 +3,8 @@
 import { createHash } from 'node:crypto';
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { basename, join, relative, sep } from 'node:path';
-import { enums, ISO_TS_RE, ORDER_ID_RE, RECORD_ID_RE, SHA256_RE, ULID_RE } from './enums.mjs';
+import { prefixProblem } from './ids.mjs';
+import { enums, ASK_ID_RE, ISO_TS_RE, ORDER_ID_RE, RECORD_ID_RE, SHA256_RE, TYPE_WORDS, ULID_RE } from './enums.mjs';
 import { movingRefSeverity, projectRoot, readBranches, scanMovingRefs } from './verify-refs.mjs';
 
 export const sha256Hex = (bytes) => createHash('sha256').update(bytes).digest('hex');
@@ -25,6 +26,7 @@ export const ORDER_KEYS = [
   'depends_on', 'parent', 'amends', 'supersedes', 'absorbs', 'reverts', 'due', 'notes',
   'risk', 'cost_effect', 'rollback', // SPEC-0003 §4
   'workflow', // AMD-0007 §3: an optional template, not a lifecycle
+  'continues', // AMD-0015 §2: free text naming the earlier record of the project the order continues
 ];
 export const WORKFLOWS = ['qrspi'];
 const REVIEW_DECISIONS = ['approve', 'comment', 'reject']; // AMD-0007 §1
@@ -119,10 +121,12 @@ export function validateOrderText(text, fileName, { pinned = false } = {}) {
   }
 
   const get = (k) => fields.get(k);
+  const continues = get('continues');
+  if (continues && (Array.isArray(continues.value) || !isNonEmptyString(continues.value))) errors.push(err(continues.line, 'E_FIELD_TYPE', '"continues" must be one line of text naming the earlier record this order continues'));
   const id = get('id');
   if (id && isNonEmptyString(id.value)) {
     if (typeof id.value !== 'string' || !ORDER_ID_RE.test(id.value)) {
-      errors.push(err(id.line, 'E_ID_FORMAT', `id ${JSON.stringify(id.value)} does not match ORD-0000 or ORD-0000.A`));
+      errors.push(err(id.line, 'E_ID_FORMAT', `id ${JSON.stringify(id.value)} does not match ORD-0000 or ORD-0000.A (with the project code: <CODE>-0000)`));
     } else if (fileName && basename(fileName, '.md') !== id.value) {
       errors.push(err(id.line, 'E_ID_MISMATCH', `id "${id.value}" does not equal the file name "${basename(fileName)}"`));
     }
@@ -187,7 +191,7 @@ export function validateOrderText(text, fileName, { pinned = false } = {}) {
 
 export const ASK_KEYS = ['id', 'title', 'kind', 'created', 'recommendation', 'options', 'refs'];
 export const ASK_REQUIRED = ['id', 'title', 'kind', 'created', 'recommendation'];
-export const ASK_ID_RE = /^ASK-\d{4}$/;
+export { ASK_ID_RE }; // both forms: ASK-0000 and <CODE>-ASK-0000 (lib/enums.mjs)
 export const ASK_BODY_MAX = 600;
 export const DEFAULT_DECIDE_OPTIONS = ['approve', 'reject', 'change'];
 
@@ -211,7 +215,7 @@ export function validateAskText(text, fileName) {
   }
   const id = fields.get('id');
   if (id && isNonEmptyString(id.value)) {
-    if (!ASK_ID_RE.test(id.value)) errors.push(err(id.line, 'E_ID_FORMAT', `id ${JSON.stringify(id.value)} does not match ASK-0000`));
+    if (!ASK_ID_RE.test(id.value)) errors.push(err(id.line, 'E_ID_FORMAT', `id ${JSON.stringify(id.value)} does not match ASK-0000 (with the project code: <CODE>-ASK-0000)`));
     else if (fileName && basename(fileName, '.md') !== id.value) errors.push(err(id.line, 'E_ID_MISMATCH', `id "${id.value}" does not equal the file name "${basename(fileName)}"`));
   }
   const kind = fields.get('kind');
@@ -249,7 +253,7 @@ export const askBody = (text) => {
 
 // ---------- project.json ----------
 
-const PROJECT_KEYS = ['wip_limit', 'budget', 'reversible', 'deploy', 'protected_branches', 'ownership_boundaries', 'locale', 'github_owner', 'budget_monthly_usd', 'budget_currency', 'timezone', 'hosting', 'hosting_where'];
+const PROJECT_KEYS = ['project_code', 'wip_limit', 'budget', 'reversible', 'deploy', 'protected_branches', 'ownership_boundaries', 'locale', 'github_owner', 'budget_monthly_usd', 'budget_currency', 'timezone', 'hosting', 'hosting_where'];
 const HOSTING_CHOICES = ['managed', 'own-server', 'already', 'later']; // AMD-0006
 
 function lineOfKey(text, key) {
@@ -274,6 +278,10 @@ export function validateProjectText(text) {
   const errors = [];
   const at = (k) => lineOfKey(text, k);
   for (const k of Object.keys(p)) if (!PROJECT_KEYS.includes(k)) errors.push(err(at(k), 'E_UNKNOWN_KEY', `key "${k}" is not a configuration key of SPEC-0001 §11`));
+  // ORD-0041 part 1 (AMD-0015 §1): the project code, 2 to 5 capital letters, never a type word.
+  if ('project_code' in p && !(typeof p.project_code === 'string' && /^[A-Z]{2,5}$/.test(p.project_code) && !TYPE_WORDS.includes(p.project_code))) {
+    errors.push(err(at('project_code'), 'E_FIELD_TYPE', `"project_code" must be 2 to 5 capital letters and not one of the type words ${TYPE_WORDS.join(', ')}`));
+  }
   if ('wip_limit' in p && !(Number.isInteger(p.wip_limit) && p.wip_limit >= 1)) errors.push(err(at('wip_limit'), 'E_FIELD_TYPE', '"wip_limit" must be an integer >= 1'));
   if ('budget' in p) {
     if (!isObject(p.budget)) errors.push(err(at('budget'), 'E_FIELD_TYPE', '"budget" must be an object'));
@@ -322,7 +330,21 @@ export function validateVerifyText(text, fileName, { movingRefs = null } = {}) {
   if (!isObject(v)) return [err(1, 'E_FIELD_TYPE', 'a verify file must be a JSON object')];
   const errors = [];
   const at = (k) => lineOfKey(text, k);
-  for (const k of Object.keys(v)) if (!['order', 'checks'].includes(k)) errors.push(err(at(k), 'E_UNKNOWN_KEY', `key "${k}" is not allowed in a verify file`));
+  for (const k of Object.keys(v)) if (!['order', 'checks', 'preflight'].includes(k)) errors.push(err(at(k), 'E_UNKNOWN_KEY', `key "${k}" is not allowed in a verify file`));
+  // AMD-0015 §4: `preflight`, a list of checks with the shape of `checks`, meant to pass on the untouched tree before
+  // any work. A verify file without it is valid.
+  if ('preflight' in v) {
+    if (!Array.isArray(v.preflight) || v.preflight.length === 0) errors.push(err(at('preflight'), 'E_FIELD_TYPE', '"preflight" must be a non-empty list of checks (leave the key out when there is none)'));
+    else v.preflight.forEach((c, i) => {
+      const where = `preflight[${i}]`;
+      if (!isObject(c)) return errors.push(err(at('preflight'), 'E_FIELD_TYPE', `${where} must be an object`));
+      for (const k of Object.keys(c)) if (!['name', 'run', 'expect_exit'].includes(k)) errors.push(err(at(k), 'E_UNKNOWN_KEY', `${where}: key "${k}" is not allowed`));
+      for (const k of ['name', 'run', 'expect_exit']) if (!(k in c)) errors.push(err(at('preflight'), 'E_MISSING_FIELD', `${where}: key "${k}" is missing`));
+      for (const k of ['name', 'run']) if (k in c && !isNonEmptyString(c[k])) errors.push(err(at(k), 'E_FIELD_TYPE', `${where}: "${k}" must be a non-empty string`));
+      if ('expect_exit' in c && !(Number.isInteger(c.expect_exit) && c.expect_exit >= 0 && c.expect_exit <= 255)) errors.push(err(at('expect_exit'), 'E_FIELD_TYPE', `${where}: "expect_exit" must be an integer 0-255`));
+      return undefined;
+    });
+  }
   if (!('order' in v)) errors.push(err(1, 'E_MISSING_FIELD', 'key "order" is missing'));
   else if (!(typeof v.order === 'string' && ORDER_ID_RE.test(v.order))) errors.push(err(at('order'), 'E_ID_FORMAT', `order ${JSON.stringify(v.order)} is not an order ID`));
   else if (fileName && basename(fileName, '.json') !== v.order) errors.push(err(at('order'), 'E_ID_MISMATCH', `order "${v.order}" does not equal the file name "${basename(fileName)}"`));
@@ -617,8 +639,8 @@ export function validateFile(path, display = path, { pinned = new Set(), events,
   if (name === 'events.jsonl') errors = validateEventsBuffer(readFileSync(path));
   else if (name === 'project.json') errors = validateProjectText(readFileSync(path, 'utf8'));
   else if (name === 'director.lock') errors = validateLockText(readFileSync(path, 'utf8'));
-  else if (/^ORD-.*\.json$/.test(name)) errors = validateVerifyText(readFileSync(path, 'utf8'), name, { movingRefs: refsFor() });
-  else if (/^ASK-.*\.md$/.test(name)) errors = validateAskText(readFileSync(path, 'utf8'), name);
+  else if (/^[A-Z]{2,5}-.*\.json$/.test(name)) errors = validateVerifyText(readFileSync(path, 'utf8'), name, { movingRefs: refsFor() });
+  else if (/^(?:[A-Z]{2,5}-)?ASK-.*\.md$/.test(name)) errors = validateAskText(readFileSync(path, 'utf8'), name);
   else if (name.endsWith('.md')) errors = validateOrderText(readFileSync(path, 'utf8'), name, { pinned: pinned.has(basename(name, '.md')) });
   else errors = [err(1, 'E_FILE_TYPE', 'not an order (ORD-*.md), ask (ASK-*.md), verify file (ORD-*.json), director.lock, project.json or events.jsonl')];
   return errors.map((e) => ({ file: toPosix(display), ...e }));
@@ -643,6 +665,17 @@ export function validateTree(root) {
   if (existsSync(verifyDir)) {
     const branches = readBranches(root); // read once per validate
     for (const f of readdirSync(verifyDir).filter((f) => f.endsWith('.json')).sort()) out.push(...validateFile(join(verifyDir, f), rel(join(verifyDir, f)), { events, branches }));
+  }
+  // ORD-0041 part 1: a record file carries the old prefix (an existing record, or a project without a code) or the
+  // code of this project. A record that is already in the log is valid for ever, whatever its prefix.
+  const known = new Set(events.filter((e) => e?.type === 'record.created').map((e) => e.subject));
+  for (const [dir, ext] of [[ordersDir, '.md'], [verifyDir, '.json'], [asksDir, '.md']]) {
+    if (!existsSync(dir)) continue;
+    for (const f of readdirSync(dir).filter((x) => x.endsWith(ext)).sort()) {
+      const id = basename(f, ext);
+      const problem = prefixProblem(root, id, { exists: known.has(id) });
+      if (problem) out.push({ file: toPosix(rel(join(dir, f))), ...err(1, 'E_ID_PREFIX', problem) });
+    }
   }
   const lock = join(a, 'director.lock');
   if (existsSync(lock)) out.push(...validateFile(lock, rel(lock)));

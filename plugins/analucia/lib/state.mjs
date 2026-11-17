@@ -1,5 +1,5 @@
 // Derived state: replay of the event log, and the transition rules of SPEC-0001 §4.
-import { enums } from './enums.mjs';
+import { ORDER_ID_RE, enums } from './enums.mjs';
 
 // Transitions drawn in SPEC-0001 §4, plus SPEC-0002 §3.
 const DRAWN = {
@@ -88,7 +88,7 @@ export function applyEvent(state, e, line) {
   const order = () => state.orders[e.subject];
   switch (e.type) {
     case 'record.created':
-      if (/^ORD-/.test(e.subject ?? '')) {
+      if (ORDER_ID_RE.test(e.subject ?? '')) { // an order in either form (ORD-0041 part 1)
         state.orders[e.subject] = {
           state: 'draft', since: e.ts, created: e.ts, reason: null, blocked_by: null,
           runs: 0, last_outcome: null, evidence: [], amendments: [], reopens: 0, last_line: line,

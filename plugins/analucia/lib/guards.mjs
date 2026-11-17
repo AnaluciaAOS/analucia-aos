@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { derive } from './derive.mjs';
 import { appendEvent, logPath, readLog, timestampFor, verifyChain } from './log.mjs';
 import { tokenPatterns } from './secret-patterns.mjs';
+import { declaredDirector } from './session-names.mjs';
 import { sessionEnded, sessionStarted } from './sessions.mjs';
 import { RuleError } from './state.mjs';
 
@@ -40,7 +41,11 @@ export function sessionStart(root, input = {}) {
   if (typeof input.model === 'string') agent.model = input.model;
   if (typeof input.session_id === 'string') agent.session = input.session_id;
   try {
-    appendEvent(root, { type: 'role.declared', actor: 'executor', subject: null, agent, payload: { role: 'executor', source: typeof input.source === 'string' ? input.source : 'startup' } });
+    // ORD-0041 part 5 (AMD-0015 §5): a session that declared the role director under this session id stays a
+    // director when the hook runs again (a resume, a compaction, a clear); it is not declared executor.
+    if (!declaredDirector(root, agent.session)) {
+      appendEvent(root, { type: 'role.declared', actor: 'executor', subject: null, agent, payload: { role: 'executor', source: typeof input.source === 'string' ? input.source : 'startup' } });
+    }
   } catch (x) {
     out.push('', `Analucia: role.declared was not recorded (${x.code}: ${x.message}).`);
   }
@@ -72,18 +77,41 @@ export function openRuns(events) {
     if (e.type === 'run.started') open.set(e.subject, e);
     if (e.type === 'run.finished') open.delete(e.subject);
   }
-  return [...open.entries()].map(([id, e]) => ({ id, run: e.payload?.run ?? null }));
+  // ORD-0041 part 5: the session that started the run, when run.started recorded one.
+  return [...open.entries()].map(([id, e]) => ({ id, run: e.payload?.run ?? null, session: typeof e.agent?.session === 'string' && e.agent.session ? e.agent.session : null }));
 }
 
 // Returns null when it is safe to stop, else the message that explains how to clear the block.
-export function checkWriteback(root) {
+// ORD-0041 part 5 (AMD-0015 §5): `input` is the hook input. Only the session that owns an open run is blocked by it.
+// Another session, and a session that declared the role director, end freely: checkWritebackNote says which order
+// has a run open and where. With no session in the input, or a run with no recorded owner, every session is
+// blocked as before. A broken log blocks every session.
+const hookSession = (input) => (typeof input?.session_id === 'string' && input.session_id ? input.session_id : null);
+function runsFor(root, input) {
+  const events = readLog(root).events;
+  const runs = openRuns(events);
+  const session = hookSession(input);
+  if (!session) return { mine: runs, others: [] };
+  if (declaredDirector(root, session, events)) return { mine: [], others: runs };
+  return { mine: runs.filter((r) => !r.session || r.session === session), others: runs.filter((r) => r.session && r.session !== session) };
+}
+
+// One line per run that is open in another session, or null. Never a block.
+export function checkWritebackNote(root, input = {}) {
+  if (!existsSync(logPath(root)) || verifyChain(readFileSync(logPath(root)))) return null;
+  const { mine, others } = runsFor(root, input);
+  if (mine.length || !others.length) return null;
+  return others.map(({ id, run, session }) => `Analucia: run ${run ?? '?'} of ${id} is open ${session ? `in another session (${session})` : 'with no recorded session'}; this session may end.`).join('\n');
+}
+
+export function checkWriteback(root, input = {}) {
   if (!existsSync(logPath(root))) return null;
   const broken = verifyChain(readFileSync(logPath(root)));
   if (broken) {
     return `Analucia: the event log is broken at .analucia/events.jsonl line ${broken.line} (${broken.code}: ${broken.message}). `
       + 'Do not edit the log. The director restores it from git and confirms with "aos verify-log" before anyone continues.';
   }
-  const runs = openRuns(readLog(root).events);
+  const runs = runsFor(root, input).mine;
   if (!runs.length) return null;
   return runs.map(({ id, run }) => `Analucia: run ${run ?? '?'} of ${id} is still open. Before ending, the executor records its outcome: `
     + `aos run finish ${id} --outcome <done|blocked|needs_decision|budget_exhausted|failed> --evidence .analucia/evidence/${id}/report.md`).join('\n');
@@ -368,12 +396,17 @@ function addedLines(root, sha) {
 
 function commitChecks(root, commits) {
   const started = new Set();
+  const open = new Set();
+  const finished = new Map();
+  const late = [];
   const logFile = join(root, '.analucia', 'events.jsonl');
   if (existsSync(logFile)) {
     for (const l of readFileSync(logFile, 'utf8').split('\n')) {
       try {
         const e = JSON.parse(l);
-        if (e.type === 'run.started') started.add(e.subject);
+        if (e.type === 'run.started') { started.add(e.subject); open.add(e.subject); }
+        // ORD-0041 part 8 (AMD-0015 §6): the last run.finished of each order, and whether a run of it is open now.
+        if (e.type === 'run.finished') { open.delete(e.subject); finished.set(e.subject, e.ts); }
       } catch { /* blank line */ }
     }
   }
@@ -389,12 +422,19 @@ function commitChecks(root, commits) {
       const valid = ids.filter((id) => started.has(id));
       if (!ids.length) trailers.push(`${short} changes ${outside[0]}${outside.length > 1 ? ` (+${outside.length - 1} more)` : ''} but has no "Analucia-Order: ORD-NNNN" trailer`);
       else if (!valid.length) trailers.push(`${short} names ${ids.join(', ')} in its trailer, but no such order has a run.started in the log`);
+      // ORD-0041 part 8: a commit of an order dated after its last run.finished, while no run of it is open, is work
+      // outside any run. Commits that touch only owner and director paths (the sign-off) never reach this point.
+      const when = Number(git(root, ['log', '-1', '--format=%ct', sha]).stdout.trim()) * 1000;
+      for (const id of valid) {
+        const end = finished.get(id);
+        if (end && !open.has(id) && when > Date.parse(end)) late.push(`${short} carries the trailer of ${id} and is dated after its last run.finished (${end})`);
+      }
     }
     for (const a of addedLines(root, sha)) {
       for (const p of patterns) if (p.re.test(a.text)) secrets.push(`${short} ${a.file}:${a.line} matches ${p.name}`);
     }
   }
-  return { trailers, secrets };
+  return { trailers, secrets, late };
 }
 
 const fail = (code, message, problems) => Object.assign(new RuleError(code, message), { problems });
@@ -419,9 +459,10 @@ export function checkPush(root, { remote = 'origin', url } = {}) {
   }
   // SPEC-0004 §4–§5: every commit being pushed.
   const { range, commits } = pushedCommits(root, remote);
-  const { trailers, secrets } = commitChecks(root, commits);
+  const { trailers, secrets, late } = commitChecks(root, commits);
   if (secrets.length) throw fail('E_SECRET', `push refused: ${secrets.length} added line(s) in ${range} match a secret pattern (values not shown)`, secrets);
   if (trailers.length) throw fail('E_NO_ORDER_TRAILER', `push refused: ${trailers.length} commit(s) in ${range} change code outside an order`, trailers);
+  if (late.length) throw fail('E_COMMIT_AFTER_FINISH', `push refused: ${late.length} commit(s) in ${range} were made after the run of their order was finished, with no run open`, late);
   return { owner, url: redactUrl(remoteUrl), range, commits: commits.length };
 }
 

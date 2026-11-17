@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { bootstrapDraftPlan, directorEntryPlan } from './drafts.mjs';
 import { agentsMdSync, directorLines, installGitHooks, secretPatterns } from './guards.mjs';
 import { checklistText, hostingTable, parseHosting } from './hosting.mjs';
+import { codeProblem, codeTakenBy, projectCode, registerCode } from './ids.mjs';
 import { appendEvent, readLog, timestampFor } from './log.mjs';
 import { permissionsWrite } from './permissions.mjs';
 import { RuleError } from './state.mjs';
@@ -48,6 +49,8 @@ export const QUESTIONS = [
   { key: 'executor_tool', moment: 2, type: 'text', def: () => 'claude-code' },
   { key: 'approve_from', moment: 2, type: 'enum', values: ['terminal', 'sheet'], def: () => 'sheet' },
   { key: 'owner_locale', moment: 2, type: 'enum', values: LOCALES, def: (ctx) => ctx.locale },
+  // ORD-0041 part 1 (AMD-0015 §8): the project code, 2 to 5 capital letters. Empty = no code yet (as before).
+  { key: 'project_code', moment: 2, type: 'code', optional: true, def: () => '' },
   // AMD-0006: where the project will be hosted, before the first order; later is always valid.
   { key: 'hosting', moment: 3, type: 'hosting', def: () => 'later' },
   { key: 'deploy_target', moment: 3, type: 'text', def: () => 'none' },
@@ -59,7 +62,7 @@ const BY_KEY = Object.fromEntries(QUESTIONS.map((q) => [q.key, q]));
 
 const isUnknown = (v) => typeof v === 'string' && v.trim().toLowerCase() === 'unknown';
 const allowedText = (q) => (q.values ? q.values.join(', ')
-  : { int: 'an integer >= 1', number: 'a number >= 0', list: 'a list of text', account: 'a GitHub account name', hosting: 'managed, own-server, already: <where>, later', text: 'text' }[q.type]);
+  : { int: 'an integer >= 1', number: 'a number >= 0', list: 'a list of text', account: 'a GitHub account name', code: '2 to 5 capital letters, not ORD, AMD, ASK, DEC, OBS or SPEC', hosting: 'managed, own-server, already: <where>, later', text: 'text' }[q.type]);
 
 // One raw answer -> its stored value, or E_ANSWER_VALUE.
 export function normalize(q, raw) {
@@ -88,6 +91,12 @@ export function normalize(q, raw) {
     case 'hosting': {
       const h = parseHosting(raw);
       return h.choice === 'already' ? `already: ${h.where}` : h.choice;
+    }
+    case 'code': {
+      if (typeof raw !== 'string') throw bad();
+      const v = raw.trim();
+      if (v && codeProblem(v)) throw bad();
+      return v;
     }
     case 'account': {
       const v = String(raw).trim();
@@ -140,7 +149,7 @@ export function resolveAnswers(root, given, { locale, now = new Date() }) {
       value = q.def(ctx);
       if (value === undefined) throw new RuleError('E_MISSING_FIELD', `${q.key} is required: it has no safe default`);
       source = 'default';
-      notices.push({ key: q.key === 'budget_monthly_usd' ? 'notice.budget_unknown' : 'notice.default', vars: { value: show(value) }, of: q.key });
+      notices.push({ key: q.key === 'budget_monthly_usd' ? 'notice.budget_unknown' : q.key === 'project_code' ? 'notice.no_code' : 'notice.default', vars: { value: show(value) }, of: q.key });
     }
     const same = prev && JSON.stringify(prev.value) === JSON.stringify(value) && (prev.source === 'default') === (source === 'default');
     answers[q.key] = { value, source: source === 'kept' ? (prev.source ?? 'owner') : source, at: same ? prev.at : at };
@@ -165,6 +174,8 @@ function projectJsonPlan(root, answers) {
   const raw = existed ? readFileSync(p, 'utf8') : '';
   const current = existed ? JSON.parse(raw) : {};
   const next = { ...current, wip_limit: answers.wip_limit.value, github_owner: answers.github_owner.value, locale: answers.owner_locale.value };
+  // ORD-0041 part 1: the code is written once; an empty answer never removes a code the project has.
+  if (answers.project_code?.value) next.project_code = answers.project_code.value;
   // ORD-0012: record the owner's time zone once, so every later timestamp uses it, whatever machine writes it.
   if (!next.timezone) next.timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const hosting = parseHosting(answers.hosting.value);
@@ -265,7 +276,7 @@ export function configPlan(root, answers, { locale }) {
   items.push(directorScopePlan(root));
   // ORD-0040 part 2: the director's entrypoint, and the first order already written when commits predate the Loop.
   items.push(directorEntryPlan(root));
-  items.push(bootstrapDraftPlan(root));
+  items.push(bootstrapDraftPlan(root, { code: answers.project_code?.value || projectCode(root) }));
   return items;
 }
 
@@ -314,6 +325,15 @@ export function planText(t, resolved, items, secrets, { now = new Date(), wizard
 export async function runInit(root, { provided, locale, dryRun = false, isTTY = false, ask, out = () => {}, now = new Date(), wizard = false, onConfirmed = () => {} }) {
   if (!dryRun && !isTTY) throw new RuleError('E_OWNER_TTY', 'onboarding writes the project configuration: the owner runs "aos init" in their own terminal (an agent may prepare --answers and run --dry-run)');
   const resolved = resolveAnswers(root, provided, { locale, now });
+  // ORD-0041 part 1 (AMD-0015 §1): the code is unique on the computer, and a project keeps the code its records
+  // carry. Both are checked before the plan, so a refusal writes nothing.
+  const code = resolved.answers.project_code.value;
+  if (code) {
+    const current = projectCode(root);
+    if (current && current !== code) throw new RuleError('E_ANSWER_VALUE', `project_code: this project already has the code ${current}; its records carry it and it is not changed (asked: ${code})`);
+    const folder = codeTakenBy(root, code);
+    if (folder) throw new RuleError('E_CODE_TAKEN', `the project code ${code} is already used by the project in ${folder}; choose another code for this project`);
+  }
   // One language field (OBS-103): the answer owner_locale sets the plan, the CONFIRM prompt and onboarding.json.
   const language = resolved.answers.owner_locale.value;
   const t = catalog(language);
@@ -328,6 +348,7 @@ export async function runInit(root, { provided, locale, dryRun = false, isTTY = 
   if (answer.trim() !== 'CONFIRM') throw new RuleError('E_NOT_CONFIRMED', t('plan.not_confirmed'));
   onConfirmed(); // ORD-0033 B.2: the first write of aos init comes after CONFIRM (onboarding.started, then the plan)
   for (const i of items) if (i.status !== 'unchanged') i.apply();
+  if (code) registerCode(root, code); // the list of codes of this computer (CLAUDE_CONFIG_DIR is honoured)
   if (resolved.changed.length) {
     appendEvent(root, { type: 'operation.logged', actor: 'owner', subject: null, payload: { operation: 'onboarding', changed: resolved.changed } }, { now });
   }

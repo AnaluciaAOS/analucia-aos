@@ -19,7 +19,8 @@ const aos = (...args) => {
 
 test('valid fixture tree passes', () => {
   const r = aos('validate', join(FIX, 'valid'));
-  assert.equal(r.stdout, '');
+  // ORD-0041 part 6: no error and no warning; only the one closing line.
+  assert.match(r.stdout, /^OK: [^\n]+\n$/);
   assert.equal(r.status, 0);
 });
 

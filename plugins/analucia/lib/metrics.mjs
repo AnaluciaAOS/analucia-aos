@@ -1,5 +1,6 @@
 // The owner's first hour (AMD-0004): from the log only, how long it took from the start of onboarding to the first
 // order the owner closed with evidence. Numbers only: no target and no verdict.
+import { ORDER_ID_RE } from './enums.mjs';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { readLog } from './log.mjs';
@@ -32,7 +33,7 @@ export function firstHour(events) {
     first_closed: close ? { ts: close.ts, order: close.subject, line: closeIndex + 1 } : null,
     elapsed: close && start ? {
       minutes: Math.round((Date.parse(close.ts) - Date.parse(startTs)) / 60000),
-      orders: new Set(window.filter((e) => e.type === 'record.created' && /^ORD-/.test(e.subject ?? '')).map((e) => e.subject)).size,
+      orders: new Set(window.filter((e) => e.type === 'record.created' && ORDER_ID_RE.test(e.subject ?? '')).map((e) => e.subject)).size,
       runs: window.filter((e) => e.type === 'run.started').length,
     } : null,
     status: close ? 'reached' : 'not_reached',

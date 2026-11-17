@@ -8,6 +8,8 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { PLUGIN_DIR, aosCommand } from './cli.mjs';
+import { ORDER_ID_RE } from './enums.mjs';
+import { formatId, nextId, prefixProblem, projectCode } from './ids.mjs';
 import { admit } from './lifecycle.mjs';
 import { LOCK_REL, hashLF, readLock } from './lock.mjs';
 import { appendEvent, logPath, timestampFor } from './log.mjs';
@@ -18,7 +20,7 @@ import { readBranches } from './verify-refs.mjs';
 export const DRAFTS_REL = '.analucia/drafts';
 export const DIRECTOR_ENTRY_REL = '.analucia/DIRECTOR.md';
 export const BOOTSTRAP_ID = 'ORD-0001';
-const ID_RE = /^ORD-\d{4}(?:\.[A-Z])?$/;
+const ID_RE = ORDER_ID_RE; // either form (ORD-0041 part 1)
 const TEMPLATES = fileURLToPath(new URL('../templates/', import.meta.url));
 const draftsDir = (root) => join(root, '.analucia', 'drafts');
 const git = (root, args) => spawnSync('git', ['-C', root, ...args], { encoding: 'utf8' });
@@ -37,7 +39,7 @@ export function listDrafts(root) {
   const dir = draftsDir(root);
   if (!existsSync(dir)) return [];
   const names = readdirSync(dir);
-  const ids = [...new Set(names.map((f) => /^(ORD-[^.]+(?:\.[A-Z])?)\.(?:md|json)$/.exec(f)?.[1]).filter(Boolean))].sort();
+  const ids = [...new Set(names.map((f) => /^([A-Z]{2,5}-[^.]+(?:\.[A-Z])?)\.(?:md|json)$/.exec(f)?.[1]).filter(Boolean))].sort();
   const records = replay(readEvents(root)).records;
   let branches;
   return ids.map((id) => {
@@ -45,7 +47,9 @@ export function listDrafts(root) {
     const verify = names.includes(`${id}.json`) ? `${DRAFTS_REL}/${id}.json` : null;
     const problems = [];
     let title = '';
-    if (!ID_RE.test(id)) problems.push(`E_ID_FORMAT ${id} is not an order ID (ORD-0000)`);
+    if (!ID_RE.test(id)) problems.push(`E_ID_FORMAT ${id} is not an order ID (ORD-0000, or <CODE>-0000 with the project code)`);
+    const prefix = prefixProblem(root, id, { exists: Boolean(records[id]) });
+    if (prefix) problems.push(`E_ID_PREFIX ${prefix}`);
     if (!order) problems.push(`E_FILE_MISSING the order file ${DRAFTS_REL}/${id}.md is missing`);
     else {
       const text = readFileSync(join(root, order), 'utf8');
@@ -69,13 +73,7 @@ export function listDrafts(root) {
 
 // The next free order ID, over the placed orders, the log and the drafts.
 export function nextOrderId(root) {
-  const seen = [];
-  for (const d of ['orders', 'drafts']) {
-    const dir = join(root, '.analucia', d);
-    if (existsSync(dir)) for (const f of readdirSync(dir)) seen.push(Number(/^ORD-(\d{4})/.exec(f)?.[1] ?? 0));
-  }
-  for (const id of Object.keys(replay(readEvents(root)).orders)) seen.push(Number(/^ORD-(\d{4})/.exec(id)?.[1] ?? 0));
-  return `ORD-${String(Math.max(0, ...seen) + 1).padStart(4, '0')}`;
+  return nextId(root, 'order');
 }
 
 // The lock with `files` added, written by the tool. An existing lock keeps its other keys and entries.
@@ -154,20 +152,24 @@ export function needsBootstrap(root) {
   if (Number(git(root, ['rev-list', '--count', 'HEAD']).stdout.trim() || 0) < 1) return false;
   for (const d of ['orders', 'drafts']) {
     const dir = join(root, '.analucia', d);
-    if (existsSync(dir) && readdirSync(dir).some((f) => /^ORD-/.test(f))) return false;
+    if (existsSync(dir) && readdirSync(dir).some((f) => /^[A-Z]{2,5}-\d/.test(f))) return false;
   }
   return Object.keys(replay(readEvents(root)).orders).length === 0;
 }
 
 // The bootstrap order, already written, as a draft: bring the existing commits under an order and make the first
 // push through the guard (OBS-130). The owner's first click places it.
-export function bootstrapDraftPlan(root, { now = new Date() } = {}) {
+// `code`: the project code chosen in this same init (it is not in project.json yet when the plan is built).
+export function bootstrapDraftPlan(root, { now = new Date(), code = projectCode(root) } = {}) {
   const wanted = needsBootstrap(root);
   const apply = () => {
     mkdirSync(draftsDir(root), { recursive: true });
     const created = timestampFor(root, now).slice(0, 10);
-    writeFileSync(join(draftsDir(root), `${BOOTSTRAP_ID}.md`), render(root, template('bootstrap-order.md')).split('{created}').join(created));
-    writeFileSync(join(draftsDir(root), `${BOOTSTRAP_ID}.json`), template('bootstrap-verify.json'));
+    // The first order of the project carries its code when it has one (ORD-0041 part 1).
+    const id = formatId('order', 1, { code: code || null });
+    const own = (text) => text.split(BOOTSTRAP_ID).join(id);
+    writeFileSync(join(draftsDir(root), `${id}.md`), own(render(root, template('bootstrap-order.md'))).split('{created}').join(created));
+    writeFileSync(join(draftsDir(root), `${id}.json`), own(template('bootstrap-verify.json')));
   };
   return { item: 'bootstrap_draft', status: wanted ? 'created' : 'unchanged', apply };
 }

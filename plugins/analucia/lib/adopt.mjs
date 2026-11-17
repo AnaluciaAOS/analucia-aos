@@ -1,6 +1,7 @@
 // Adoption audit (SPEC-0006): reads a project that is already under way, before the first order.
 // Read only: it writes nothing except its report (.analucia/views/adoption.md) and one adoption.audited event.
 // Never prints a secret: a finding names the kind, the file, the commit and the line — never the value.
+import { detectEarlierRecords } from './earlier-records.mjs';
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { extname, join, relative, sep } from 'node:path';
@@ -272,7 +273,8 @@ export function runAudit(root, { now = new Date() } = {}) {
     languages: Object.fromEntries(Object.entries(languages).sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1)).slice(0, 12)),
   };
   const counts = Object.fromEntries(SEVERITIES.map((s) => [s, findings.filter((f) => f.severity === s).length]));
-  return { baseline, findings, notVerified, counts, proposals: proposals(findings) };
+  // ORD-0041 part 2 (AMD-0015 §3): the folders of earlier records of the project, by names only.
+  return { baseline, findings, notVerified, counts, proposals: proposals(findings), earlier: detectEarlierRecords(tracked) };
 }
 
 // SPEC-0006 §3: aos init audits a project that is already under way.
@@ -314,6 +316,14 @@ export function reportText(audit, locale = 'en', ts = '') {
   }
   out.push('', `## ${t('adopt.not_verified')}`, '');
   for (const n of audit.notVerified) out.push(`- ${n.check}: ${t(n.key, n.vars)}`);
+  const earlier = audit.earlier ?? [];
+  out.push('', `## ${t('adopt.earlier', { folders: earlier.length, files: earlier.reduce((n, e) => n + e.files, 0) })}`, '');
+  if (!earlier.length) out.push(`- ${t('adopt.none')}`);
+  for (const e of earlier) {
+    const numbering = e.numbering.length ? t('adopt.earlier_numbering', { list: e.numbering.map((n) => t('adopt.earlier_range', n)).join(', ') }) : t('adopt.earlier_no_numbering');
+    out.push(`- ${e.folder}: ${t('adopt.earlier_files', { n: e.files })}; ${numbering}`);
+  }
+  if (earlier.length) out.push('', t('adopt.earlier_question'));
   out.push('', `## ${t('adopt.proposals')}`, '');
   if (!audit.proposals.length) out.push(`- ${t('adopt.none')}`);
   for (const p of audit.proposals) {

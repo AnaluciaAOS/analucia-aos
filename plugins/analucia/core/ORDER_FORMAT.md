@@ -9,6 +9,8 @@ An order file is a **definition**, never state. Its state (`draft`, `queued`, `a
 
 `.analucia/orders/<ID>.md`, where `<ID>` matches `^ORD-\d{4}(\.[A-Z])?$` (`ORD-0001`, phase `ORD-0042.A`). The `id` key must equal the file name without `.md`.
 
+**Project code (AMD-0015 §1).** When `project.json` has `project_code` (2 to 5 capital letters, never `ORD`, `AMD`, `ASK`, `DEC`, `OBS` or `SPEC`), new orders are `<CODE>-NNNN` (`SHOP-0042`, phase `SHOP-0042.A`), new amendments `<CODE>-AMD-NNNN` and new asks `<CODE>-ASK-NNNN`; verify files, rollback plans, evidence folders and the commit trailer use the same ID. Each counter continues from the highest number the project already has. Every existing ID stays as it is and stays valid; a new record with the old prefix, or with the prefix of another project, is refused (`E_ID_PREFIX`). `aos ids` prints the map and the next free IDs.
+
 ## Front matter
 
 The file starts with a line `---` and the front matter ends at the next line `---`. Between them, only:
@@ -37,6 +39,7 @@ Nested keys, block lists (`- item`), multi-line values and comments are not acce
 | `risk` | for orders admitted with SPEC-0003 pins | One of `risk_levels`: `low`, `medium`, `high` (SPEC-0003 §4) |
 | `cost_effect` | for orders admitted with SPEC-0003 pins | One of `cost_effects`, or an inline list of them |
 | `rollback` | when `risk: high` | Path of the rollback plan, `.analucia/rollback/ORD-NNNN.md` (a director file listed in `director.lock`) |
+| `continues` | no | One line of free text naming the earlier record of the project this order continues, in the project's own numbering (AMD-0015 §2). A reference for people: it creates no relation in the log |
 | `workflow` | no | `qrspi`: the order follows the template `plugins/analucia/templates/workflow-qrspi.md` (AMD-0007 §3). A template, not a lifecycle |
 
 Orders admitted before SPEC-0003 (no `pins` in their `record.created`, ORD-0001..ORD-0007) may omit `risk` and `cost_effect` (SPEC-0003 §7).
@@ -69,6 +72,7 @@ Each error is printed as `file:line: CODE message`. The command exits 0 when eve
 | `E_MISSING_FIELD` | order, event | Required key missing or empty |
 | `E_ID_FORMAT` | order, event | Order ID not `ORD-0000[.A]`; event `id` not a ULID |
 | `E_ID_MISMATCH` | order | `id` differs from the file name |
+| `E_ID_PREFIX` | order, verify, ask | The prefix of the ID is not this project's: a new record with the old prefix in a project with a code, or the code of another project |
 | `E_KIND_ENUM` | order | `kind` not in `order_kinds` |
 | `E_FIELD_TYPE` | order, project, event | Wrong value type (date, positive integer, list, object) |
 | `E_REF_FORMAT` | order, event | A relation or `subject` that is not a record ID |

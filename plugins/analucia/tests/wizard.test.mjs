@@ -75,7 +75,8 @@ test('the language question switches every later text, the plan and the CONFIRM 
   assert.equal(provided.owner_locale, 'es');
   assert.match(o.prompts[10], /^\nQuestion 11 of 15/);
   assert.match(o.prompts[11], /^\nPregunta 12 de 15 · Entorno/);
-  assert.match(o.prompts.at(-1), /Tus respuestas:/);
+  assert.match(o.prompts.at(-2), /Tus respuestas:/);
+  assert.match(o.prompts.at(-1), /Una más: elige un código corto/, 'the code question comes last, in the chosen language (AMD-0015 §8)');
   const asked = [];
   const printed = [];
   await runInit(root, { provided, locale: 'en', isTTY: true, ask: async (q) => { asked.push(q); return 'CONFIRM'; }, out: (s) => printed.push(s), wizard: true });
@@ -96,6 +97,8 @@ test('earlier onboarding.json: Enter keeps every answer, and the questions the w
   const root = project();
   const es = JSON.parse(readFileSync(fileURLToPath(new URL('./fixtures/onboarding/answers-es.json', import.meta.url)), 'utf8')).answers;
   await runInit(root, { provided: { ...es, domain: 'example.test', external_artifacts: ['docs/old.md'] }, locale: 'es', isTTY: true, ask: async () => 'CONFIRM', out: () => {} });
+  // AMD-0015 §8: a project already initialised without a code is asked only the code; this one has a code.
+  writeFileSync(join(root, '.analucia', 'project.json'), `${JSON.stringify({ ...JSON.parse(readFileSync(join(root, '.analucia', 'project.json'), 'utf8')), project_code: 'WIZ' })}\n`);
   const before = readFileSync(join(root, '.analucia', 'onboarding.json'), 'utf8');
   const o = owner([]); // Enter everywhere
   const { provided } = await wizard(root, { locale: 'en', ask: o.ask, out: o.out });

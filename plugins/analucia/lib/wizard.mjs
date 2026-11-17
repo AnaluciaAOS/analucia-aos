@@ -5,6 +5,7 @@
 // Answers are stored with the keys and values of QUESTIONS (onboarding.mjs), so answers files and earlier
 // onboarding.json files keep working; the questions it does not ask (executor_tool, domain, external_artifacts)
 // keep their earlier answer or their safe default.
+import { codeProblemKey, codeTakenBy, projectCode } from './ids.mjs';
 import { DELIVERED_WHEN_DEFAULT, LOCALES, catalog, readOnboarding, remoteOwner } from './onboarding.mjs';
 
 export const BLOCKS = ['security', 'operation', 'environment'];
@@ -63,8 +64,29 @@ export function progressLine(t, i, answered) {
 
 // Runs the wizard. ask(prompt) returns the owner's line; out(text) prints. Returns { provided, locale }:
 // provided holds raw answers for resolveAnswers (a key is left out when the owner kept an earlier free-text answer).
+// ORD-0041 part 1 (AMD-0015 §8): one more answer, the project code, typed. Enter leaves the project without a code
+// for now. Returns the code or null.
+async function askCode(root, { t, ask, out }) {
+  for (;;) {
+    const raw = (await ask(`\n${t('w.code')}\n> `)).trim().toUpperCase(); // typed in small letters is the same code
+    if (raw === '') { out(t('w.code_later')); return null; }
+    const problem = codeProblemKey(raw);
+    if (problem) { out(t(`w.code_bad.${problem}`)); continue; }
+    const folder = codeTakenBy(root, raw);
+    if (folder) { out(t('w.code_taken', { code: raw, folder })); continue; }
+    return raw;
+  }
+}
+
 export async function wizard(root, { locale: startLocale = 'en', ask, out }) {
   const previous = readOnboarding(root).answers ?? {};
+  const hasCode = Boolean(projectCode(root) || previous.project_code?.value);
+  // A project that is already initialised and has no code is asked only that.
+  if (Object.keys(previous).length && !hasCode) {
+    const lang = LOCALES.includes(previous.owner_locale?.value) ? previous.owner_locale.value : startLocale;
+    const code = await askCode(root, { t: catalog(lang), ask, out });
+    return { provided: code ? { project_code: code } : {}, locale: lang };
+  }
   const ctx = { detected: remoteOwner(root) ?? (previous.github_owner?.value && previous.github_owner.value !== 'none' ? previous.github_owner.value : null) };
   const chosen = new Map(); // index -> stored value
   const answered = new Set();
@@ -118,5 +140,9 @@ export async function wizard(root, { locale: startLocale = 'en', ask, out }) {
   // A question kept with Enter is left out, so resolveAnswers keeps the earlier answer as it was.
   const provided = {};
   WIZARD.forEach((q, i) => { if (chosen.has(i)) provided[q.key] = chosen.get(i); });
+  if (!hasCode) {
+    const code = await askCode(root, { t, ask, out });
+    if (code) provided.project_code = code;
+  }
   return { provided, locale };
 }

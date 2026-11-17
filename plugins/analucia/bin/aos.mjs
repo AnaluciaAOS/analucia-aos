@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // aos: Analucia AOS command line (Node 20+, no dependencies). All commands accept --root <dir> (default: cwd).
 //   aos validate [path]                 validate orders, project.json and events.jsonl (exit 0 valid, 1 invalid)
-//   aos event append --type <t> --actor <role> [--subject <id>|null] [--payload <json>]
+//   aos event append --type <t> --actor <role> [--subject <id>|null] [--payload <json>] [--agent <json>]
 //                                       the only writer of .analucia/events.jsonl (appends one line)
 //   aos verify-log                      recompute the hash chain; exit 1 at the first broken link
 //   aos derive                          write .analucia/views/state.json and resume.md
@@ -27,16 +27,18 @@
 //   aos check-push [remote] [url] | aos install-git-hooks   right GitHub account on push
 //   aos next                            one line: the single thing that comes next and who does it (ORD-0040)
 //   aos launchers install               the owner's click launchers: INICIAR, FIRMAR, DETENER, REANUDAR, IMPORTAR
+//   aos ids                             the map of record IDs: each existing ID, the same number under the project code, the next free IDs
 //   aos drafts                          the draft orders waiting in .analucia/drafts/ and whether each can be placed
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { createInterface } from 'node:readline/promises';
+import { resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { derive, summarize } from '../lib/derive.mjs';
 import {
-  agentsMdSync, checkPush, checkRoles, checkWriteback, findRoot, halt, installGitHooks, preToolUse, resume, sessionEnd, sessionStart,
+  agentsMdSync, checkPush, checkRoles, checkWriteback, checkWritebackNote, findRoot, halt, installGitHooks, preToolUse, resume, sessionEnd, sessionStart,
 } from '../lib/guards.mjs';
 import { ALERT_NEXT, alertLine, costRecord, costSummary, currentMonth, readProject, statusLines } from '../lib/cost.mjs';
-import { admit, close, pauseOrder, resumeOrder, runFinish, runStart, verify } from '../lib/lifecycle.mjs';
+import { admit, close, pauseOrder, requirePreflight, resumeOrder, runFinish, runStart, verify } from '../lib/lifecycle.mjs';
 import { permissionsWrite } from '../lib/permissions.mjs';
 import { LOCALES, catalog, onboardingCompleted, onboardingStarted, runInit } from '../lib/onboarding.mjs';
 import { wizard } from '../lib/wizard.mjs';
@@ -53,6 +55,10 @@ import { installLauncher, sign } from '../lib/sign.mjs';
 import { DRAFTS_REL, listDrafts, nextOrderId } from '../lib/drafts.mjs';
 import { installLaunchers } from '../lib/launchers.mjs';
 import { nextLine } from '../lib/next.mjs';
+import { idsMap } from '../lib/ids.mjs';
+import { okLine } from '../lib/ok-line.mjs';
+import { sessionName, sessionNameOutput } from '../lib/session-names.mjs';
+import { docsCheck } from '../lib/earlier-records.mjs';
 import { ERRORS, withNext } from '../lib/errors.mjs';
 import { renderCommands } from '../lib/cli.mjs';
 import { withRootLine } from '../lib/session-lines.mjs';
@@ -61,7 +67,7 @@ import { formatError, isWarning, validateFile, validateTree } from '../lib/valid
 
 const USAGE = [
   'usage: aos validate [path]',
-  '       aos event append --type <t> --actor <role> [--subject <id>|null] [--payload <json>]',
+  '       aos event append --type <t> --actor <role> [--subject <id>|null] [--payload <json>] [--agent <json>]',
   '       aos verify-log',
   '       aos derive',
   '       aos history <subject>',
@@ -70,6 +76,7 @@ const USAGE = [
   '       aos verify ORD-NNNN',
   '       aos close ORD-NNNN [ORD-…] [--as director]',
   '       aos admit ORD-NNNN',
+  '       aos preflight <order ID>',
   '       aos ask open ASK-NNNN',
   '       aos role declare <role> [--scope "<paths>"]',
   '       aos permissions write',
@@ -93,6 +100,8 @@ const USAGE = [
   '       aos next',
   '       aos launchers install',
   '       aos drafts',
+  '       aos ids',
+  '       aos docs check <order ID>',
   '       aos explain <CODE>',
   '       (every command accepts --root <dir>)',
 ].join('\n');
@@ -133,7 +142,9 @@ function cmdValidate({ opts, positional }) {
   const found = statSync(target).isDirectory() ? validateTree(target) : validateFile(target);
   // ORD-0034 §5: a warning (moving ref in a verify file of an order admitted before the rule) never changes the exit code.
   for (const e of found) process.stdout.write(`${isWarning(e) ? 'warning: ' : ''}${withNext(formatError(e), e.code)}\n`);
-  return found.some((e) => !isWarning(e)) ? 1 : 0;
+  if (found.some((e) => !isWarning(e))) return 1;
+  sayOk(statSync(target).isDirectory() ? target : null, 'validate', { errors: 0, warnings: found.length });
+  return 0;
 }
 
 function cmdEvent({ opts, positional }, root) {
@@ -158,7 +169,16 @@ function cmdEvent({ opts, positional }, root) {
   const subject = opts.subject === undefined || opts.subject === 'null' ? null : opts.subject;
   const before = existsSync(logPath(root)) ? readFileSync(logPath(root)).length : 0;
   try {
-    const { event, line } = appendEvent(root, { type: opts.type, actor: opts.actor, subject, payload });
+    // ORD-0041 part 5: --agent <json> is recorded when given (the session that owns a run). Never taken from the environment here.
+    let agent;
+    if (opts.agent !== undefined) {
+      try {
+        agent = JSON.parse(opts.agent);
+      } catch (x) {
+        return fail(0, 'E_JSON', `--agent is not valid JSON: ${x.message}`);
+      }
+    }
+    const { event, line } = appendEvent(root, { type: opts.type, actor: opts.actor, subject, payload, ...(agent !== undefined ? { agent } : {}) });
     process.stdout.write(`appended ${LOG_REL}:${line} ${event.id} ${event.type} ${event.subject ?? '-'}\n`);
     return 0;
   } catch (x) {
@@ -177,6 +197,7 @@ function cmdVerifyLog(_args, root) {
   if (broken) return fail(broken.line, broken.code, broken.message);
   const lines = buf.length ? buf.toString('utf8').split('\n').length - 1 : 0;
   process.stdout.write(`${LOG_REL}: ${lines} lines, hash chain intact\n`);
+  sayOk(root, 'verify_log', { lines });
   return 0;
 }
 
@@ -188,6 +209,7 @@ function cmdDerive(_args, root) {
   }
   const { resume } = derive(root);
   process.stdout.write(`wrote .analucia/views/state.json and .analucia/views/resume.md (${resume.split('\n').length - 1} lines)\n`);
+  sayOk(root, 'derive');
   return 0;
 }
 
@@ -217,7 +239,16 @@ const refuse = (cmd, x) => {
 };
 // The locale of owner-facing lines: the one fallback of lib/locale.mjs (ORD-0033 B.3), as in the SessionStart hook.
 const ownerLocale = (root) => personLocale(root);
-const parseAgent = (opts) => (opts.agent === undefined ? undefined : JSON.parse(opts.agent));
+// ORD-0041 part 6 (AMD-0015 §9): the one closing line of a command the owner runs, on success.
+const sayOk = (root, command, facts) => process.stdout.write(`${okLine(catalog(ownerLocale(root)), command, facts)}\n`);
+// The agent of an event: --agent <json> when given; else, inside a Claude Code session, the session of the shell that
+// runs the command (CLAUDE_CODE_SESSION_ID), so a declared role and a started run belong to a session (ORD-0041
+// parts 3 and 5). Outside a session: none, as before.
+const parseAgent = (opts) => {
+  if (opts.agent !== undefined) return JSON.parse(opts.agent);
+  const session = process.env.CLAUDE_CODE_SESSION_ID;
+  return session ? { tool: 'claude-code', session } : undefined;
+};
 
 function cmdRun({ opts, positional }, root) {
   const [sub, id] = positional;
@@ -296,6 +327,7 @@ async function cmdHalt({ opts }, root) {
     if (isTTY && !(reason && reason.trim())) reason = await askLine(catalog(ownerLocale(root))('halt.ask_reason'));
     halt(root, { reason, isTTY });
     process.stdout.write('halted: every tool call except reads is blocked until the owner runs "aos resume"\n');
+    sayOk(root, 'halt');
     return 0;
   } catch (x) {
     return refuse('halt', x);
@@ -306,6 +338,7 @@ function cmdResume(_args, root) {
   try {
     resume(root, { isTTY: process.stdin.isTTY === true });
     process.stdout.write('resumed: .analucia/HALT removed\n');
+    sayOk(root, 'resume');
     return 0;
   } catch (x) {
     return refuse('resume', x);
@@ -316,10 +349,25 @@ function cmdResume(_args, root) {
 const guardRoot = (opts, input = {}) => (opts.root ? opts.root : findRoot(process.env.CLAUDE_PROJECT_DIR ?? input.cwd ?? '.'));
 
 function cmdCheckWriteback({ opts }) {
-  const root = guardRoot(opts);
+  // ORD-0041 part 5: the hook input (the session that is ending) on standard input, when there is one.
+  let input = {};
+  if (process.stdin.isTTY !== true) {
+    try {
+      const text = readFileSync(0, 'utf8');
+      if (text.trim()) input = JSON.parse(text);
+    } catch {
+      input = {};
+    }
+  }
+  const root = guardRoot(opts, input);
   if (!root) return 0;
-  const message = checkWriteback(root);
-  if (!message) return 0;
+  const message = checkWriteback(root, input);
+  if (!message) {
+    // Not blocked: one line when another session has a run open.
+    const note = checkWritebackNote(root, input);
+    if (note) process.stdout.write(`${note}\n`);
+    return 0;
+  }
   process.stderr.write(`${renderCommands(message)}\n`); // the command that exists here, not "aos run finish"
   return 2;
 }
@@ -341,11 +389,20 @@ function cmdHook({ opts, positional }) {
     return 0;
   }
   if (!root) return 0; // not an Analucia project
+  // ORD-0041 part 3: the title of the session, from its role and the project. It prints one line of JSON, or nothing
+  // when the session already has the name or a person named it. It writes nothing.
+  if (positional[0] === 'session-name') {
+    const output = sessionNameOutput(root, input);
+    if (output) process.stdout.write(`${JSON.stringify(output)}\n`);
+    return 0;
+  }
   if (positional[0] === 'session-start') {
     const text = withRootLine(sessionStart(root, input), root, input.cwd ?? process.env.CLAUDE_PROJECT_DIR ?? process.cwd());
     // ORD-0040 part 3: the one next step, right under the root line (the same line as `aos next`).
     const [status, rootLine, ...rest] = text.split('\n');
-    process.stdout.write([status, rootLine, nextLine(root, { explicit: true }), ...rest].join('\n'));
+    // ORD-0041 part 3: the name of the session, said in words too, for a window that does not show the title a hook sets.
+    const named = catalog(ownerLocale(root))('session.name', { name: sessionName(root, typeof input.session_id === 'string' ? input.session_id : null) });
+    process.stdout.write([status, rootLine, nextLine(root, { explicit: true }), named, ...rest].join('\n'));
     return 0;
   }
   if (positional[0] === 'session-end') {
@@ -362,7 +419,7 @@ function cmdHook({ opts, positional }) {
     process.stderr.write(`${message}${hint}\n`);
     return 2;
   }
-  process.stderr.write('usage: aos hook session-start|session-end|pre-tool-use\n');
+  process.stderr.write('usage: aos hook session-start|session-end|session-name|pre-tool-use\n');
   return 2;
 }
 
@@ -407,6 +464,7 @@ function cmdPermissions({ positional }, root) {
   try {
     const r = permissionsWrite(root);
     process.stdout.write(`${r.path} ${r.changed ? 'written' : 'unchanged'} (allow/ask/deny profile${r.marketplace ? `; plugin ${r.marketplace.plugin}@${r.marketplace.name} enabled from github ${r.marketplace.repo}` : ''}); .claude/settings.local.json untouched\n`);
+    sayOk(root, 'permissions', { path: r.path });
     return 0;
   } catch (x) {
     return refuse('permissions write', x);
@@ -436,6 +494,7 @@ function cmdInstallGitHooks(_args, root) {
   try {
     const r = installGitHooks(root, fileURLToPath(import.meta.url));
     process.stdout.write(`${r.file} ${r.changed ? 'written' : 'unchanged'}; core.hooksPath = .githooks (repo-local)\n`);
+    sayOk(root, 'git_hooks', { file: r.file });
     return 0;
   } catch (x) {
     return refuse('install-git-hooks', x);
@@ -487,8 +546,10 @@ function cmdAdmit({ positional }, root) {
     process.stdout.write(`${t('admit.open_title', { n: open.length })}\n`);
     for (const o of open) process.stdout.write(`  - ${o.id} ${o.title} (${o.state})\n`);
     process.stdout.write(`${t('admit.open_hint')}\n\n`);
-    const { pins } = admit(root, id);
+    const { pins, preflight } = admit(root, id);
     process.stdout.write(`${id}: admitted (record.created, draft -> ready -> queued, actor director); pins plugin ${pins.plugin}, ${Object.entries(pins.specs).map(([k, v]) => `${k} ${v}`).join(', ')}\n`);
+    process.stdout.write(`${preflight.has ? t('preflight.passed', { n: preflight.results.length, evidence: preflight.evidence }) : t('preflight.none', { id })}\n`);
+    sayOk(root, 'admit', { id });
     return 0;
   } catch (x) {
     return refuse('admit', x);
@@ -537,6 +598,7 @@ async function cmdCeo({ opts, positional }, root) {
     if (sub === 'export') {
       const r = ceoExport(root, { out: opts.out ?? DEFAULT_SHEET, locale: opts.locale ?? 'en' });
       process.stdout.write(`wrote ${r.path} (${r.bytes} bytes; ${r.asks} asks, ${r.orders} orders). Open it in Excel; fill only the yellow cells.\n`);
+      sayOk(root, 'ceo_export', { path: r.path });
       return 0;
     }
     const tty = process.stdin.isTTY === true;
@@ -558,6 +620,8 @@ async function cmdCeo({ opts, positional }, root) {
       };
       const plan = await ceoImport(root, positional[1], { isTTY, ask });
       process.stdout.write(plan.length ? `recorded:\n${describePlan(plan).join('\n')}\n` : 'nothing to record: no decision or sign-off is filled in\n');
+      if (plan.length) sayOk(root, 'ceo_import', { n: plan.length });
+      else sayOk(root, 'ceo_import_none');
       return 0;
     }
   } catch (x) {
@@ -717,6 +781,7 @@ async function cmdSign({ opts }, root) {
   const out = (s) => process.stdout.write(`${s}\n`);
   if (opts['install-launcher'] === true) {
     installLauncher(root, { out });
+    sayOk(existsSync(`${root}/.analucia/project.json`) ? root : null, 'launcher_firmar', { dir: resolve(root).split(sep).join('/') });
     return 0;
   }
   const ask = async (question) => {
@@ -729,7 +794,9 @@ async function cmdSign({ opts }, root) {
   };
   try {
     // A refused push is reported in one line by sign() and is not an error of the signature itself.
-    await sign(root, { isTTY: process.stdin.isTTY === true, ask, out });
+    const r = await sign(root, { isTTY: process.stdin.isTTY === true, ask, out });
+    if (r.signed?.length || r.placed?.length || r.reviewed?.length) sayOk(root, 'sign', { signed: r.signed?.length ? r.signed.join(', ') : '0', placed: r.placed?.length ?? 0, reviewed: r.reviewed?.length ?? 0 });
+    else sayOk(root, 'sign_none');
     return 0;
   } catch (x) {
     return refuse('sign', x);
@@ -807,6 +874,7 @@ function cmdLaunchers({ positional }, root) {
   const t = catalog(ownerLocale(existsSync(`${root}/.analucia/project.json`) ? root : null));
   for (const { file, status } of installLaunchers(root)) process.stdout.write(`${t('launchers.line', { file, status: t(`status.${status}`) })}\n`);
   process.stdout.write(`${t('launchers.done')}\n`);
+  sayOk(existsSync(`${root}/.analucia/project.json`) ? root : null, 'launchers', { n: 5, dir: resolve(root).split(sep).join('/') });
   return 0;
 }
 
@@ -827,7 +895,71 @@ function cmdDrafts(_args, root) {
   return drafts.every((d) => d.ok) ? 0 : 1;
 }
 
+// aos ids (ORD-0041 part 1): the map for people. Each existing record with its ID and the same number under the
+// project code, then the next free ID of each kind. One line when the project has no code yet. Reads only.
+function cmdIds(_args, root) {
+  const t = catalog(ownerLocale(root));
+  const map = idsMap(root);
+  if (!map.code) {
+    process.stdout.write(`${t('ids.no_code', { order: map.next.order, amendment: map.next.amendment, ask: map.next.ask })}\n`);
+    return 0;
+  }
+  process.stdout.write(`${t('ids.title', { code: map.code, n: map.records.length })}\n`);
+  const width = Math.max(0, ...map.records.map((r) => r.id.length));
+  for (const r of map.records) process.stdout.write(`${r.id.padEnd(width)}  =  ${r.under_code}${r.id === r.under_code ? '' : `  ${t('ids.same_record')}`}\n`);
+  process.stdout.write(`${t('ids.next', { order: map.next.order, amendment: map.next.amendment, ask: map.next.ask })}\n`);
+  return 0;
+}
+
+// aos docs check <ID> (ORD-0041 part 2, AMD-0015 §3): for the commits of that order, every file added inside a folder
+// of earlier records must be named, by its path, in the order or one of its amendments. Meant for verify files.
+// Exit 0 when it holds (or the project has no such folder), 1 with the list, 2 on a usage error.
+function cmdDocs({ positional }, root) {
+  if (positional[0] !== 'check' || !positional[1]) {
+    process.stderr.write('usage: aos docs check <order ID>\n');
+    return 2;
+  }
+  const t = catalog(ownerLocale(root));
+  const id = positional[1];
+  const r = docsCheck(root, id);
+  if (!r.folders) {
+    process.stdout.write(`${t('docs.none', { id })}\n`);
+    return 0;
+  }
+  if (!r.unnamed.length) {
+    process.stdout.write(`${t('docs.ok', { id, added: r.added, commits: r.commits })}\n`);
+    return 0;
+  }
+  process.stdout.write(`${t('docs.fail', { id, n: r.unnamed.length })}\n`);
+  for (const f of r.unnamed) process.stdout.write(`  - ${f}\n`);
+  process.stdout.write(`  ${t('docs.next')}\n`);
+  return 1;
+}
+
+// aos preflight <ID> (ORD-0041 part 4, AMD-0015 §4): the start conditions of an order (the `preflight` checks of its
+// verify file), run on the tree as it is. For a placed order or a draft. It changes no state and writes no event.
+// Exit 0 when every check passes or the verify file has none; 1 with E_PREFLIGHT_FAILED; 2 on a usage error.
+function cmdPreflight({ positional }, root) {
+  const id = positional[0];
+  if (!id) {
+    process.stderr.write('usage: aos preflight <order ID>\n');
+    return 2;
+  }
+  const t = catalog(ownerLocale(root));
+  const onCheck = (c) => process.stdout.write(c.passed ? `PASS ${c.name} (exit ${c.exit})\n` : `FAIL ${c.name} (exit ${c.exit}, expected ${c.expect_exit})\n`);
+  try {
+    const p = requirePreflight(root, id, { onCheck });
+    process.stdout.write(`${p.has ? t('preflight.ok', { id, n: p.results.length, evidence: p.evidence }) : t('preflight.ok_none', { id })}\n`);
+    return 0;
+  } catch (x) {
+    return refuse('preflight', x);
+  }
+}
+
 const commands = {
+  preflight: cmdPreflight,
+  docs: cmdDocs,
+  ids: cmdIds,
   next: cmdNext,
   launchers: cmdLaunchers,
   drafts: cmdDrafts,

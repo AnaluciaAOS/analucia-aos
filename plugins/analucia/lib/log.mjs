@@ -4,6 +4,7 @@ import { randomBytes } from 'node:crypto';
 import { appendFileSync, closeSync, existsSync, linkSync, openSync, readFileSync, renameSync, rmSync, statSync, writeSync } from 'node:fs';
 import { hostname } from 'node:os';
 import { join } from 'node:path';
+import { prefixProblem } from './ids.mjs';
 import { RuleError, checkRules, replay } from './state.mjs';
 import { ulid } from './ulid.mjs';
 import { sha256Hex, splitLines, validateEvent } from './validate.mjs';
@@ -229,6 +230,12 @@ function appendLocked(root, { type, actor, subject = null, payload = {}, agent }
   const line = raw.length + 1;
   const errors = validateEvent(event, line);
   if (errors.length) throw new RuleError(errors[0].code, errors.map((x) => `${x.code} ${x.message}`).join('; '));
+  // ORD-0041 part 1 (AMD-0015 §1): a new record carries the prefix of this project: its code when it has one, the
+  // old prefix when it has none. Existing lines are never judged again.
+  if (type === 'record.created') {
+    const problem = prefixProblem(root, subject);
+    if (problem) throw new RuleError('E_ID_PREFIX', problem);
+  }
   checkRules(replay(events), event, { wipLimit: readWipLimit(root), directorMayClose });
   appendFileSync(path, `${JSON.stringify(event)}\n`, { flag: 'a' });
   return { event, line };

@@ -89,7 +89,7 @@ export function nextStep(start, { explicit = false } = {}) {
   const queue = buildQueue(root, orders);
   const paused = queue.find((q) => q.state === 'paused');
   const queued = queue.find((q) => q.state === 'queued');
-  if (queued) return { who: 'executor', key: 'next.queued', vars: { id: queued.id, title: queued.title, cmd: cmd(`run start ${queued.id}`) }, root };
+  if (queued) return { who: 'executor', key: 'next.queued', vars: { id: queued.id, continues: queued.continues, title: queued.title, cmd: cmd(`run start ${queued.id}`) }, root };
   if (paused) return { who: 'executor', key: 'next.paused', vars: { id: paused.id, cmd: cmd(`resume-order ${paused.id}`) }, root };
   return { who: 'owner', key: 'next.nothing', vars: { entry: DIRECTOR_ENTRY_REL }, root };
 }
@@ -106,6 +106,7 @@ export function nextLine(start, { explicit = false, locale } = {}) {
   const t = catalog(locale ?? personLocale(step.root));
   const vars = { ...step.vars };
   if (step.how) vars.how = t(step.how.key, step.how.vars);
+  if (vars.continues) vars.id = `${vars.id} (${t('queue.continues')} ${vars.continues})`; // the earlier record it continues (AMD-0015 §2)
   if (step.what) vars.what = step.what.map((w) => t(w.key, w.vars)).join('; ');
   return t(step.key, vars).replace(/\s*\r?\n\s*/g, ' ').trim();
 }

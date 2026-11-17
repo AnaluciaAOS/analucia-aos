@@ -17,7 +17,7 @@ const orderPath = (root, id) => join(root, '.analucia', 'orders', `${id}.md`);
 
 export function askOpen(root, id, { now = new Date() } = {}) {
   const rel = `.analucia/asks/${id}.md`;
-  if (!ASK_ID_RE.test(id ?? '')) throw new RuleError('E_ID_FORMAT', `${JSON.stringify(id)} is not an ask ID (ASK-0000)`);
+  if (!ASK_ID_RE.test(id ?? '')) throw new RuleError('E_ID_FORMAT', `${JSON.stringify(id)} is not an ask ID (ASK-0000, or <CODE>-ASK-0000 with the project code)`);
   if (!existsSync(askPath(root, id))) throw new RuleError('E_FILE_MISSING', `${rel} does not exist; the director writes it first`);
   const expected = readLock(root)?.files?.[rel];
   if (!expected) throw new RuleError('E_NOT_LOCKED', `${rel} is not listed in .analucia/director.lock; the director adds it (with its sha256) before opening the ask`);
@@ -48,7 +48,7 @@ export function nextActionBy(order) {
   switch (order.state) {
     case 'draft': case 'ready': return 'director';
     case 'queued': case 'active': case 'paused': return 'executor';
-    case 'blocked': return /^ASK-\d{4}$/.test(order.blocked_by ?? '') ? 'owner' : 'director';
+    case 'blocked': return ASK_ID_RE.test(order.blocked_by ?? '') ? 'owner' : 'director';
     case 'delivered': return 'system';
     case 'verified': return 'owner';
     default: return '—';
@@ -65,7 +65,7 @@ export function commitsByOrder(root) {
   for (const rec of log.stdout.split('\x1e')) {
     const [full, short, body = ''] = rec.replace(/^\s+/, '').split('\x1f');
     if (!full) continue;
-    for (const id of new Set(body.match(/\bORD-\d{4}(?:\.[A-Z])?\b/g) ?? [])) {
+    for (const id of new Set(body.match(/\b[A-Z]{2,5}-\d{4}(?:\.[A-Z])?\b/g) ?? [])) { // either form; only order IDs are looked up
       if (!byOrder.has(id)) byOrder.set(id, []);
       byOrder.get(id).push({ full, short });
     }
@@ -99,7 +99,7 @@ export function sheetData(root) {
     const o = s.orders[id];
     const file = readFields(orderPath(root, id));
     return {
-      id, title: file?.fields.get('title')?.value ?? '', risk: file?.fields.get('risk')?.value ?? '—', state: o.state,
+      id, title: `${file?.fields.get('title')?.value ?? ''}${typeof file?.fields.get('continues')?.value === 'string' ? ` (continues ${file.fields.get('continues').value})` : ''}`, risk: file?.fields.get('risk')?.value ?? '—', state: o.state,
       next: nextActionBy(o), commits: (byOrder.get(id) ?? []).map((c) => c.short).join(', ') || '—', onGitHub: onRemote(id),
     };
   });

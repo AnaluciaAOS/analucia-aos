@@ -17,6 +17,8 @@ CLI: `node plugins/analucia/bin/aos.mjs <command>` (written `aos <command>` belo
 - Work only on `.analucia/orders/ORD-NNNN.md`, by its ID. No file → `E_NO_ORDER`: stop and ask the director.
 - An order is a definition, never state. Stay inside its scope; anything else is a new order for the director.
 - To propose an order, read `.analucia/DIRECTOR.md`: a draft goes in `.analucia/drafts/` (`ORD-NNNN.md` with its verify file `ORD-NNNN.json`) and nowhere else; only the owner places it, in `aos sign`. `aos drafts` checks the drafts.
+- In a project with a code (`project_code`), new records are `<CODE>-NNNN`, `<CODE>-AMD-NNNN`, `<CODE>-ASK-NNNN`, and files, evidence and the commit trailer use that ID. Existing IDs never change. `aos ids` prints the map and the next free IDs.
+- In an adopted project, before writing an order look for the earlier record it continues, declare `continues:`, and write in the existing document or under `.analucia/`, not next to it (`aos docs check <ID>` checks it).
 - `aos next` prints, in one line, the single thing that comes next and who does it.
 
 ### Executor loop: one run, one outcome
@@ -25,13 +27,18 @@ CLI: `node plugins/analucia/bin/aos.mjs <command>` (written `aos <command>` belo
 3. Evidence: `.analucia/evidence/ORD-NNNN/report.md` (template `plugins/analucia/templates/report.md`) with raw command outputs and the fixed section `## Evidencia` (for every figure: total and base, how the sample was chosen, which decision depends on it), ending in `OUTCOME: <outcome>`.
 4. `aos run finish ORD-NNNN --outcome <o> --evidence <path>`, with o = `done` | `blocked` | `needs_decision` | `budget_exhausted` | `failed`.
    done → delivered · blocked / needs_decision → blocked (`--blocked-by ASK-NNNN` or `--reason`) · budget_exhausted / failed → queued.
-5. Stop. Never end or compact with a run open: the Stop/PreCompact hook (`aos check-writeback`) blocks it.
+5. Stop. After `run finish` you commit nothing: what you find goes to the report as pending (the push guard refuses such a commit, `E_COMMIT_AFTER_FINISH`). Never end or compact with a run open: the Stop/PreCompact hook (`aos check-writeback`) blocks it.
 - To stop an order on purpose: `aos pause ORD-NNNN --reason "…"` (closes the run as `blocked`); later `aos resume-order ORD-NNNN` (a new run, within the attempt budget). `.analucia/views/queue.md` shows what comes next.
 - The owner signs with `aos sign` (or the FIRMAR launcher) at their own terminal; never run `aos sign`.
 - `aos launchers install` (any role, an agent included: it writes files only) puts the owner's click launchers in the project root: INICIAR (`aos init`), FIRMAR (`aos sign`), DETENER (`aos halt`), REANUDAR (`aos resume`), IMPORTAR (`aos ceo import`). Each opens a real console where only a person can answer; never run those commands yourself.
 - A document for the owner (plan, design, mockup): `aos review request <path> --order ORD-NNNN`. The owner decides in `aos sign`; apply the notes under "Corrections to apply" in `resume.md`, then request again. Never write a `review.decision`.
 - A director file looks wrong → `run finish … --outcome needs_decision` and stop. Do not fix it.
 - STOP ≠ SUCCESS: report `blocked` honestly; a login window or account chooser is `blocked`.
+
+### Owner data and controls
+- A data file of the owner has one writer; never overwrite it without comparing first (`plugins/analucia/templates/owner-data-file.md`).
+- An expected value says which rule must produce it, and its unit, not only the number.
+- A control (guard, check, test of a computation) calls the same function the product uses, never a copy.
 
 ### Never edit director files (protected paths)
 `core/*.md` · `.analucia/orders/**` · `.analucia/amendments/**` · `.analucia/verify/**` · `.analucia/rollback/**` · `.analucia/asks/**` · `.analucia/director.lock` · `.analucia/HALT`

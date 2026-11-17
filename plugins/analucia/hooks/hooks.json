@@ -1,31 +1,47 @@
 {
-  "description": "Analucia AOS guards (SPEC-0002 §4): resume at start, sessions (AMD-0007), no silent ending, off switch and protected paths.",
+  "description": "Analucia AOS guards (SPEC-0002 §4): resume at start, sessions (AMD-0007), no silent ending, off switch and protected paths; sessions named by role (ORD-0041 part 3).",
   "hooks": {
     "SessionStart": [
       {
         "hooks": [
-          { "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/bin/aos.mjs\" hook session-start" }
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/bin/aos.mjs\" hook session-start"
+          },
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/bin/aos.mjs\" hook session-name"
+          }
         ]
       }
     ],
     "SessionEnd": [
       {
         "hooks": [
-          { "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/bin/aos.mjs\" hook session-end" }
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/bin/aos.mjs\" hook session-end"
+          }
         ]
       }
     ],
     "Stop": [
       {
         "hooks": [
-          { "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/bin/aos.mjs\" check-writeback" }
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/bin/aos.mjs\" check-writeback"
+          }
         ]
       }
     ],
     "PreCompact": [
       {
         "hooks": [
-          { "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/bin/aos.mjs\" check-writeback" }
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/bin/aos.mjs\" check-writeback"
+          }
         ]
       }
     ],
@@ -33,7 +49,20 @@
       {
         "matcher": "*",
         "hooks": [
-          { "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/bin/aos.mjs\" hook pre-tool-use" }
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/bin/aos.mjs\" hook pre-tool-use"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/bin/aos.mjs\" hook session-name"
+          }
         ]
       }
     ]

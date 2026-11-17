@@ -76,7 +76,10 @@ export async function sign(root, { isTTY, ask, out = () => {}, now = new Date(),
   const t = catalog(localeOf(root));
   const drafts = await placeWaitingDrafts(root, { t, ask, out, now });
   const result = await signOrders(root, { t, ask, out, now, push, open });
-  return { ...result, placed: drafts.placed, not_placed: drafts.refused };
+  // ORD-0041 part 7 (AMD-0015 §7): at least one order closed on a branch that is not the default branch, and the
+  // sign-off pushed: offer the step to the default branch.
+  const merged = result.signed?.length && result.pushed ? await offerStepToDefault(root, { t, ask, out }) : undefined;
+  return { ...result, placed: drafts.placed, not_placed: drafts.refused, ...(merged ? { merged } : {}) };
 }
 
 async function signOrders(root, { t, ask, out, now, push, open }) {
@@ -129,6 +132,54 @@ async function signOrders(root, { t, ask, out, now, push, open }) {
   appendEvent(root, { type: 'owner.signed', actor: 'owner', subject: null, payload: { orders: passed, failed } }, { now });
   out(t('sign.closed', { ids: passed.join(', ') }));
   return commitSignOff(root, { t, out, push, closed: passed, failed, reviewed });
+}
+
+// The default branch of the repository: what origin/HEAD names, else main, else master. Null when none exists.
+function defaultBranch(root) {
+  const head = git(root, ['symbolic-ref', '-q', '--short', 'refs/remotes/origin/HEAD']).stdout.trim();
+  if (head.startsWith('origin/')) return head.slice('origin/'.length);
+  for (const b of ['main', 'master']) if (git(root, ['rev-parse', '--verify', '-q', `refs/heads/${b}`]).status === 0) return b;
+  return null;
+}
+
+// ORD-0041 part 7 (AMD-0015 §7): the step to the default branch, after a signature on another branch. It shows the
+// branch, the number of commits and that it is a fast-forward, and asks for the typed word MERGE. On that word:
+// switch, merge --ff-only, push (through the pre-push guard). If a fast-forward is not possible, or a step fails,
+// nothing further changes and one line says so. Never a force, never a merge commit. The caller already checked
+// that this is the owner's terminal. Returns undefined when there is nothing to offer (already on the default branch).
+async function offerStepToDefault(root, { t, ask, out }) {
+  const branch = git(root, ['rev-parse', '--abbrev-ref', 'HEAD']).stdout.trim();
+  const into = defaultBranch(root);
+  if (!into || !branch || branch === 'HEAD' || branch === into) return undefined;
+  git(root, ['fetch', '-q', 'origin', into]); // what the remote has now; without a network the local knowledge is used
+  const commits = Number(git(root, ['rev-list', '--count', `refs/heads/${into}..HEAD`]).stdout.trim() || 0);
+  const result = { offered: false, done: false, branch, into, commits };
+  const contains = (ref) => git(root, ['rev-parse', '--verify', '-q', ref]).status !== 0 || git(root, ['merge-base', '--is-ancestor', ref, 'HEAD']).status === 0;
+  if (!contains(`refs/heads/${into}`) || !contains(`refs/remotes/origin/${into}`)) {
+    out(t('sign.merge_not_ff', { branch, into }));
+    return result;
+  }
+  result.offered = true;
+  const answer = await ask(t('sign.merge_offer', { branch, into, n: commits }));
+  if (answer.trim() !== 'MERGE') {
+    out(t('sign.merge_skipped', { into, branch }));
+    return result;
+  }
+  const failed = (step, r) => { out(t('sign.merge_failed', { into, step, why: whyRefused(r) })); return result; };
+  const sw = git(root, ['switch', '-q', into]);
+  if (sw.status !== 0) return failed('git switch', sw);
+  const ff = git(root, ['merge', '-q', '--ff-only', branch]);
+  if (ff.status !== 0) {
+    git(root, ['switch', '-q', branch]); // back where the owner was; the default branch did not move
+    return failed('git merge --ff-only', ff);
+  }
+  const p = git(root, ['push']);
+  if (p.status !== 0) {
+    out(t('sign.merge_unpushed', { into, why: whyRefused(p) }));
+    return result;
+  }
+  out(t('sign.merge_done', { into, commit: git(root, ['rev-parse', '--short', 'HEAD']).stdout.trim() }));
+  return { ...result, done: true };
 }
 
 // Commit only the sign-off files (the log and the evidence: owner and director paths, SPEC-0004 §4) and push.

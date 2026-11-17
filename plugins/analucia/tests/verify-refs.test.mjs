@@ -92,7 +92,7 @@ test('short and full SHAs, {order_commit} and {order_commit}^ pass', () => {
   ] });
   const r = validate(root);
   assert.equal(r.status, 0, r.stdout);
-  assert.equal(r.stdout, '');
+  assert.match(r.stdout, /^OK: [^\n]+\n$/); // ORD-0041 part 6: no error, no warning, only the closing line
   rmSync(root, { recursive: true, force: true });
 });
 
@@ -108,7 +108,7 @@ test('git log --grep, pathspecs, single revisions and quoted text pass (director
   ] });
   const r = validate(root);
   assert.equal(r.status, 0, r.stdout);
-  assert.equal(r.stdout, '');
+  assert.match(r.stdout, /^OK: [^\n]+\n$/); // ORD-0041 part 6: no error, no warning, only the closing line
   rmSync(root, { recursive: true, force: true });
 });
 

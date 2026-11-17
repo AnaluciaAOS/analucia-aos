@@ -17,6 +17,10 @@ import { sign } from '../lib/sign.mjs';
 import { replay } from '../lib/state.mjs';
 import { WIZARD, wizard } from '../lib/wizard.mjs';
 
+// The list of project codes lives in Claude Code's configuration folder: a scratch one, never the owner's.
+// Test files may share one process, so the test sets it again when it starts.
+const CONFIG = mkdtempSync(join(tmpdir(), 'aos-closing-cfg-'));
+process.env.CLAUDE_CONFIG_DIR = CONFIG;
 const AOS = fileURLToPath(new URL('../bin/aos.mjs', import.meta.url));
 const env = { ...process.env, GIT_TERMINAL_PROMPT: '0' };
 delete env.CLAUDE_PROJECT_DIR;
@@ -42,6 +46,7 @@ const noProjectAbove = (dir) => {
 };
 
 test('closing path: empty folder → launchers → init → first draft → placed by the owner → run → signed → closed', async (t) => {
+  process.env.CLAUDE_CONFIG_DIR = CONFIG;
   const dir = mkdtempSync(join(tmpdir(), 'aos-closing-'));
   if (!noProjectAbove(dir)) return t.skip('a folder above the temp folder holds .analucia');
   assert.deepEqual(readdirSync(dir), [], 'a new empty folder');
@@ -60,11 +65,12 @@ test('closing path: empty folder → launchers → init → first draft → plac
   assert.ok(next(dir).includes(launcherFile('INICIAR')));
   assert.match(agent(dir, ['init']).stderr, /E_OWNER_TTY/);
   const numbers = WIZARD.map((q) => (q.key === 'github_owner' ? '2' : '1')); // no GitHub account: this folder has no remote
-  const w = window([...numbers, '', 'CONFIRM']);
+  const w = window([...numbers, '', 'DEMO', 'CONFIRM']); // the 15 answers, the summary, the project code, then CONFIRM
   const startedAt = new Date();
   const { provided } = await wizard(dir, { locale: 'en', ask: w.ask, out: w.out });
   const init = await runInit(dir, { provided, locale: 'en', isTTY: true, ask: w.ask, out: w.out, wizard: true, onConfirmed: () => onboardingStarted(dir, { startedAt }) });
   assert.equal(init.applied, true);
+  assert.equal(JSON.parse(readFileSync(join(dir, '.analucia', 'project.json'), 'utf8')).project_code, 'DEMO');
   assert.ok(existsSync(join(dir, '.analucia', 'events.jsonl')) && existsSync(join(dir, '.analucia', 'DIRECTOR.md')));
   assert.equal(readFileSync(join(dir, 'CLAUDE.md'), 'utf8'), '@AGENTS.md\n');
   assert.equal(agent(dir, ['check-roles']).status, 0);
@@ -72,52 +78,52 @@ test('closing path: empty folder → launchers → init → first draft → plac
 
   // 4. agent, as director: nothing is pending, so it writes the first order as a draft, with its verify file.
   assert.match(next(dir), /^Nothing is pending\./);
-  assert.match(agent(dir, ['drafts']).stdout, /Next free ID: ORD-0001/);
+  assert.match(agent(dir, ['drafts']).stdout, /Next free ID: DEMO-0001/);
   mkdirSync(join(dir, '.analucia', 'drafts'), { recursive: true });
-  writeFileSync(join(dir, '.analucia', 'drafts', 'ORD-0001.md'), ['---', 'id: ORD-0001', 'title: Write the first page', 'kind: build', 'created: 2026-11-14', 'budget_max_minutes: 30', 'budget_max_attempts: 2', 'risk: low', 'cost_effect: none', '---', '', '# ORD-0001', '', 'Write `hello.txt` with one line.', '', '## Acceptance criteria', '', '- [ ] `hello.txt` exists and is not empty.', ''].join('\n'));
-  writeFileSync(join(dir, '.analucia', 'drafts', 'ORD-0001.json'), `${JSON.stringify({ order: 'ORD-0001', checks: [{ name: 'the page exists', run: 'test -s hello.txt', expect_exit: 0 }, { name: 'the report ends with an outcome', run: "tail -1 .analucia/evidence/ORD-0001/report.md | grep -q '^OUTCOME: '", expect_exit: 0 }] }, null, 2)}\n`);
+  writeFileSync(join(dir, '.analucia', 'drafts', 'DEMO-0001.md'), ['---', 'id: DEMO-0001', 'title: Write the first page', 'kind: build', 'created: 2026-11-14', 'budget_max_minutes: 30', 'budget_max_attempts: 2', 'risk: low', 'cost_effect: none', '---', '', '# DEMO-0001', '', 'Write `hello.txt` with one line.', '', '## Acceptance criteria', '', '- [ ] `hello.txt` exists and is not empty.', ''].join('\n'));
+  writeFileSync(join(dir, '.analucia', 'drafts', 'DEMO-0001.json'), `${JSON.stringify({ order: 'DEMO-0001', checks: [{ name: 'the page exists', run: 'test -s hello.txt', expect_exit: 0 }, { name: 'the report ends with an outcome', run: "tail -1 .analucia/evidence/DEMO-0001/report.md | grep -q '^OUTCOME: '", expect_exit: 0 }] }, null, 2)}\n`);
   const checked = agent(dir, ['drafts']);
   assert.equal(checked.status, 0, checked.stdout);
-  assert.match(checked.stdout, /^ORD-0001: ready — Write the first page$/m);
+  assert.match(checked.stdout, /^DEMO-0001: ready — Write the first page$/m);
   // The agent cannot place it: the protected path is blocked by the hook, and aos sign needs the owner.
-  const hook = spawnSync(process.execPath, [AOS, 'hook', 'pre-tool-use'], { encoding: 'utf8', env: { ...env, CLAUDE_PROJECT_DIR: dir }, input: JSON.stringify({ tool_name: 'Write', tool_input: { file_path: join(dir, '.analucia', 'orders', 'ORD-0001.md'), content: 'x' }, cwd: dir }) });
+  const hook = spawnSync(process.execPath, [AOS, 'hook', 'pre-tool-use'], { encoding: 'utf8', env: { ...env, CLAUDE_PROJECT_DIR: dir }, input: JSON.stringify({ tool_name: 'Write', tool_input: { file_path: join(dir, '.analucia', 'orders', 'DEMO-0001.md'), content: 'x' }, cwd: dir }) });
   assert.equal(hook.status, 2);
   assert.match(agent(dir, ['sign']).stderr, /E_OWNER_TTY/);
   steps.push('agent');
 
   // 5. owner, click FIRMAR: the draft is shown with its validation; PLACE places it.
-  assert.match(next(dir), new RegExp(`double-click ${launcherFile('FIRMAR').replace('.', '\\.')} .*1 draft order\\(s\\) to place \\(ORD-0001\\)`));
+  assert.match(next(dir), new RegExp(`double-click ${launcherFile('FIRMAR').replace('.', '\\.')} .*1 draft order\\(s\\) to place \\(DEMO-0001\\)`));
   const place = window(['PLACE']);
   const placed = await sign(dir, { ...place, push: false });
-  assert.deepEqual(placed.placed, ['ORD-0001']);
-  assert.match(place.printed.join('\n'), /ORD-0001: Write the first page — valid, ready to place/);
+  assert.deepEqual(placed.placed, ['DEMO-0001']);
+  assert.match(place.printed.join('\n'), /DEMO-0001: Write the first page — valid, ready to place/);
   assert.deepEqual(checkLock(dir), [], 'director.lock written by the tool');
   steps.push('click');
 
   // 6. agent, as executor: start, work, evidence, finish.
-  assert.match(next(dir), /^Next \(executor\): start ORD-0001 \(Write the first page\) with: .* run start ORD-0001$/);
-  assert.equal(agent(dir, ['run', 'start', 'ORD-0001']).status, 0);
-  assert.match(next(dir), /^Next \(executor\): run 1 of ORD-0001 is open\./);
+  assert.match(next(dir), /^Next \(executor\): start DEMO-0001 \(Write the first page\) with: .* run start DEMO-0001$/);
+  assert.equal(agent(dir, ['run', 'start', 'DEMO-0001']).status, 0);
+  assert.match(next(dir), /^Next \(executor\): run 1 of DEMO-0001 is open\./);
   writeFileSync(join(dir, 'hello.txt'), 'hello\n');
-  mkdirSync(join(dir, '.analucia', 'evidence', 'ORD-0001'), { recursive: true });
-  writeFileSync(join(dir, '.analucia', 'evidence', 'ORD-0001', 'report.md'), '# ORD-0001 — report of run 1\n\n## Para el dueño\n\nLa página existe.\n\n## Evidencia\n\n1. 1 de 1 archivo escrito.\n2. Sin muestra: se revisó el único archivo.\n3. Decisión: firmar; se puede revertir borrando el archivo.\n\nOUTCOME: done\n');
-  const finished = agent(dir, ['run', 'finish', 'ORD-0001', '--outcome', 'done', '--evidence', '.analucia/evidence/ORD-0001/report.md']);
+  mkdirSync(join(dir, '.analucia', 'evidence', 'DEMO-0001'), { recursive: true });
+  writeFileSync(join(dir, '.analucia', 'evidence', 'DEMO-0001', 'report.md'), '# DEMO-0001 — report of run 1\n\n## Para el dueño\n\nLa página existe.\n\n## Evidencia\n\n1. 1 de 1 archivo escrito.\n2. Sin muestra: se revisó el único archivo.\n3. Decisión: firmar; se puede revertir borrando el archivo.\n\nOUTCOME: done\n');
+  const finished = agent(dir, ['run', 'finish', 'DEMO-0001', '--outcome', 'done', '--evidence', '.analucia/evidence/DEMO-0001/report.md']);
   assert.equal(finished.status, 0, finished.stderr);
   assert.doesNotMatch(finished.stdout, /warning/);
-  assert.match(agent(dir, ['close', 'ORD-0001']).stderr, /E_TRANSITION|E_OWNER_TTY/, 'the executor cannot close');
+  assert.match(agent(dir, ['close', 'DEMO-0001']).stderr, /E_TRANSITION|E_OWNER_TTY/, 'the executor cannot close');
   steps.push('agent');
 
   // 7. owner, click FIRMAR: the checks run, CLOSE signs.
-  assert.match(next(dir), new RegExp(`double-click ${launcherFile('FIRMAR').replace('.', '\\.')} .*1 finished order\\(s\\) to sign \\(ORD-0001\\)`));
+  assert.match(next(dir), new RegExp(`double-click ${launcherFile('FIRMAR').replace('.', '\\.')} .*1 finished order\\(s\\) to sign \\(DEMO-0001\\)`));
   const close = window(['CLOSE']);
   const signed = await sign(dir, { ...close, push: false });
-  assert.deepEqual(signed.signed, ['ORD-0001']);
+  assert.deepEqual(signed.signed, ['DEMO-0001']);
   assert.deepEqual(signed.failed, []);
   steps.push('click');
 
   // Reached: a signed (closed) order, an intact log, valid files, and nothing pending.
   const events = readLog(dir).events;
-  assert.equal(replay(events).orders['ORD-0001'].state, 'closed');
+  assert.equal(replay(events).orders['DEMO-0001'].state, 'closed');
   assert.ok(events.some((e) => e.type === 'owner.signed' && e.actor === 'owner'));
   assert.equal(agent(dir, ['verify-log']).status, 0);
   assert.equal(agent(dir, ['validate']).status, 0, agent(dir, ['validate']).stdout);

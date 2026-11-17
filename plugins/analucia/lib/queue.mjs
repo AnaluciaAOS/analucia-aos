@@ -12,10 +12,11 @@ const byId = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
 
 function orderFile(root, id) {
   const p = join(root, '.analucia', 'orders', `${id}.md`);
-  if (!existsSync(p)) return { title: '', depends_on: [] };
+  if (!existsSync(p)) return { title: '', depends_on: [], continues: null };
   const { fields } = parseFrontMatter(readFileSync(p, 'utf8'));
   const deps = fields.get('depends_on')?.value;
-  return { title: fields.get('title')?.value ?? '', depends_on: Array.isArray(deps) ? deps : [] };
+  const continues = fields.get('continues')?.value;
+  return { title: fields.get('title')?.value ?? '', depends_on: Array.isArray(deps) ? deps : [], continues: typeof continues === 'string' && continues ? continues : null };
 }
 
 // orders: the derived state's orders map. Returns [{ id, state, next, title, depends_on }] in queue order.
@@ -34,7 +35,7 @@ export function buildQueue(root, orders) {
     placed.add(next);
     out.push(next);
   }
-  return out.map((id) => ({ id, state: orders[id].state, next: nextActionBy(orders[id]), title: info[id].title, depends_on: info[id].depends_on }));
+  return out.map((id) => ({ id, state: orders[id].state, next: nextActionBy(orders[id]), title: info[id].title, depends_on: info[id].depends_on, continues: info[id].continues }));
 }
 
 export function queueText(queue, locale = 'en') {
@@ -42,7 +43,7 @@ export function queueText(queue, locale = 'en') {
   const out = [`# ${t('queue.title')}`, '', t('queue.intro'), ''];
   if (!queue.length) out.push(t('queue.empty'));
   queue.forEach((q, i) => {
-    out.push(`${i + 1}. ${q.id} — ${t(`queue.state.${q.state}`)} (${q.state}) — ${t('queue.next')}: ${q.next}${q.title ? ` — ${q.title}` : ''}`);
+    out.push(`${i + 1}. ${q.id}${q.continues ? ` (${t('queue.continues')} ${q.continues})` : ''} — ${t(`queue.state.${q.state}`)} (${q.state}) — ${t('queue.next')}: ${q.next}${q.title ? ` — ${q.title}` : ''}`);
   });
   return `${out.join('\n')}\n`;
 }
