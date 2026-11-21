@@ -1,0 +1,4 @@
+# Test files whose invented account names are fixtures, one path per line with its reason (ORD-0043, AMD-0017 item 4).
+# scripts/scan-fixtures.mjs leaves the scan hits of category 5 inside these files out of the count.
+# The release guard still reads every declared file: the account of the project and the denylist count there as anywhere.
+plugins/analucia/tests/push-account.test.mjs  # invented account names to test the push account check

@@ -77,6 +77,8 @@ test('a session start leaves .claude/settings.json byte-identical', () => {
   const root = project({ openRun: false });
   mkdirSync(join(root, '.claude'));
   cpSync(join(REPO, '.claude', 'settings.json'), join(root, '.claude', 'settings.json'));
+  // ORD-0043 part 16: the versioned file may still hold an older profile; bring it to the current one first.
+  assert.equal(spawnSync(process.execPath, [AOS, 'permissions', 'write', '--root', root], { encoding: 'utf8', env }).status, 0);
   const before = readFileSync(join(root, '.claude', 'settings.json'));
   const r = hook(root, null, {}, 'session-start');
   assert.equal(r.status, 0, r.stderr);

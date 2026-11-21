@@ -54,9 +54,9 @@ test('aos run start records the session that starts the run; only that session i
   assert.equal(other.stderr, '');
   assert.equal(other.stdout.trimEnd().split('\n').length, 1);
   assert.match(other.stdout, /run 1 of ORD-0001 is open in another session \(session-A\); this session may end/);
-  // The same for PreCompact.
+  // PreCompact is never blocked (ORD-0043 part 1), not even for the owner of the run.
   assert.equal(stop(root, { session_id: 'session-B', hook_event_name: 'PreCompact' }).status, 0);
-  assert.equal(stop(root, { session_id: 'session-A', hook_event_name: 'PreCompact' }).status, 2);
+  assert.equal(stop(root, { session_id: 'session-A', hook_event_name: 'PreCompact' }).status, 0);
   // Finished: nobody is blocked and nothing is said.
   writeFileSync(join(root, 'report.md'), '# r\n\nOUTCOME: blocked\n');
   assert.equal(aos(root, ['run', 'finish', 'ORD-0001', '--outcome', 'blocked', '--evidence', 'report.md', '--reason', 'x'], 'session-A').status, 0);

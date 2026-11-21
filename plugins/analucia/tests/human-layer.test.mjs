@@ -48,9 +48,11 @@ function project({ locale = 'en' } = {}) {
   return root;
 }
 const admitAll = (root) => ['ORD-0001', 'ORD-0002'].map((id) => aos(root, ['admit', id]));
+// ORD-0042 part 9: a text document for the owner ends with its decisions section.
+const withDecisions = (text) => (/^## Decisiones\s*$/m.test(text) ? text : `${text}\n## Decisiones\n\nNinguna\n`);
 const doc = (root, rel, text) => {
   mkdirSync(join(root, rel, '..'), { recursive: true });
-  writeFileSync(join(root, rel), text);
+  writeFileSync(join(root, rel), withDecisions(text));
   return rel;
 };
 const scripted = (answers, asked = []) => async (q) => { asked.push(q); return answers.shift() ?? ''; };
@@ -82,7 +84,7 @@ test('review request records path, LF-normalised sha256 and order; it refuses a 
   assert.equal(e.type, 'review.requested');
   assert.equal(e.actor, 'executor');
   assert.equal(e.subject, 'ORD-0001');
-  assert.deepEqual(e.payload, { path: 'docs/plan.md', sha256: hashLF(Buffer.from('# Plan\n\nShip it.\n')), order: 'ORD-0001' });
+  assert.deepEqual(e.payload, { path: 'docs/plan.md', sha256: hashLF(Buffer.from(withDecisions('# Plan\n\nShip it.\n'))), order: 'ORD-0001' });
   const before = types(root).length;
   assert.match(aos(root, ['review', 'request', join(tmpdir(), 'elsewhere.md'), '--order', 'ORD-0001']).stderr, /E_REVIEW_PATH/);
   assert.match(aos(root, ['review', 'request', 'docs/plan.md', '--order', 'ORD-0099']).stderr, /E_NO_ORDER/);
@@ -140,7 +142,7 @@ test('notes reach the agent under "Corrections to apply"; a changed or re-reques
   writeFileSync(join(root, a), '# A\n\nFirst, changed.\n');
   assert.deepEqual(reviewState(root).map((d) => [d.path, d.status]), [[a, 'waiting'], [b, 'reject']]);
   // The rejected one is revised and requested again: it leaves the corrections and waits for the owner.
-  writeFileSync(join(root, b), '# B\n\nSecond, narrower.\n');
+  writeFileSync(join(root, b), withDecisions('# B\n\nSecond, narrower.\n'));
   requestReview(root, b, { order: 'ORD-0001' });
   resume = buildViews(root).resume;
   assert.doesNotMatch(resume, /Corrections to apply/);
@@ -158,7 +160,7 @@ test('comment and reject need a note; only the owner decides, and check-roles fl
   assert.match(lines.join('\n'), /This choice needs a note\./);
   assert.equal(readLog(root).events.filter((e) => e.type === 'review.decision').length, 1);
   // An agent cannot write a decision through aos.
-  writeFileSync(join(root, p), '# C, again\n');
+  writeFileSync(join(root, p), withDecisions('# C, again\n'));
   requestReview(root, p, { order: 'ORD-0001' });
   const sha = hashLF(readFileSync(join(root, p)));
   const payload = { path: p, decision: 'approve', note: '', sha256: sha, order: 'ORD-0001' };

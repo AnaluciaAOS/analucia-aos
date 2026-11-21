@@ -105,7 +105,7 @@ test('halt and resume refuse without a TTY (E_OWNER_TTY) and change nothing', ()
   assert.equal(readLog(root).events.length, 1);
 });
 
-test('Stop and PreCompact: check-writeback blocks while a run is open or the chain is broken', () => {
+test('Stop: check-writeback blocks while a run is open or the chain is broken; PreCompact is never blocked', () => {
   const root = project();
   writeFileSync(join(root, '.analucia', 'orders', 'ORD-0001.md'), '---\nid: ORD-0001\ntitle: t\nkind: build\ncreated: 2026-10-20\nbudget_max_minutes: 30\nbudget_max_attempts: 2\n---\n\n## Acceptance criteria\n\n- [ ] x\n');
   allowed(aos(root, ['check-writeback']));
@@ -115,7 +115,7 @@ test('Stop and PreCompact: check-writeback blocks while a run is open or the cha
   assert.equal(aos(root, ['run', 'start', 'ORD-0001']).status, 0);
   // ORD-0029 B: the command is printed as it exists on this machine, not as "aos run finish".
   blocked(aos(root, ['check-writeback'], '{"hook_event_name":"Stop","stop_hook_active":false}'), /run 1 of ORD-0001 is still open/, /node "[^"]+\/bin\/aos\.mjs" run finish ORD-0001 --outcome/);
-  blocked(aos(root, ['check-writeback'], '{"hook_event_name":"PreCompact"}'), /still open/);
+  allowed(aos(root, ['check-writeback'], '{"hook_event_name":"PreCompact"}')); // ORD-0043 part 1: a compaction is never blocked
   assert.equal(aos(root, ['run', 'finish', 'ORD-0001', '--outcome', 'done', '--evidence', '.analucia/evidence/report.md']).status, 0);
   allowed(aos(root, ['check-writeback']));
   const buf = readFileSync(logPath(root));

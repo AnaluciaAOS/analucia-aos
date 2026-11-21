@@ -40,6 +40,8 @@ Nested keys, block lists (`- item`), multi-line values and comments are not acce
 | `cost_effect` | for orders admitted with SPEC-0003 pins | One of `cost_effects`, or an inline list of them |
 | `rollback` | when `risk: high` | Path of the rollback plan, `.analucia/rollback/ORD-NNNN.md` (a director file listed in `director.lock`) |
 | `continues` | no | One line of free text naming the earlier record of the project this order continues, in the project's own numbering (AMD-0015 §2). A reference for people: it creates no relation in the log |
+| `replaces` | no (asked by `aos drafts` in a draft of kind `build`) | Inline list of paths of the project that the work of the order replaces and that must be gone when it is delivered; `[]` says, on purpose, that it replaces nothing. `aos replaced check <ID>` checks it at the commit of the order (ORD-0042 part 7) |
+| `decision` | no | One line of free text: the decision of the owner this order carries out. When the owner places the draft (`PLACE` in `aos sign`) the tool records it as a `decision.recorded` event, the first link of the chain of the order (ORD-0042 part 6) |
 | `workflow` | no | `qrspi`: the order follows the template `plugins/analucia/templates/workflow-qrspi.md` (AMD-0007 §3). A template, not a lifecycle |
 
 Orders admitted before SPEC-0003 (no `pins` in their `record.created`, ORD-0001..ORD-0007) may omit `risk` and `cost_effect` (SPEC-0003 §7).
@@ -50,9 +52,15 @@ Any other key is an error. A `state` key is a specific error, because state neve
 
 The body must contain a heading line `## Acceptance criteria` followed, before the next `#` or `##` heading, by at least one list item (`- `, `* `, `+ ` or `1. `; checkboxes `- [ ]` count).
 
+## Business rules
+
+An order may carry the body section `## Business rules` (asked by `aos drafts` in a draft of kind `build`): one rule per list item, each with one example with numbers; an order with none writes the single item `- none`. `aos sign` prints the rules of a draft before the owner's typed confirmation, and the placement records them in the `decision.recorded` event (`payload.business_rules`). Orders already placed never need the section (ORD-0042 part 10).
+
 ## Verify file
 
 `.analucia/verify/ORD-NNNN.json` (director file): `{"order": "ORD-NNNN", "checks": [{"name", "run", "expect_exit"}]}`; `aos verify` runs each `run` with bash from the repository root. Template: `plugins/analucia/templates/verify-file.example.json`.
+
+**Form and substance (ORD-0043 part 2).** A check may carry `"class": "form"`; a check without the key is a check of substance. Form is only what does not change what was built or how safely: a trailer on a commit that touches only evidence, a label or a heading of the report, the name of the branch the signature is made from. The owner may waive a failed check of form at the signature, with a written reason; a check of substance is never waived. `aos validate` refuses (`E_FORM_CLASS`) the class form on a check that runs the test suite, `aos verify-log`, `aos validate`, `aos check-roles` or the release guard.
 
 **Fixed refs only (ORD-0034).** A check must not depend on a ref that moves. `aos validate` rejects (`E_MOVING_REF`) a check that ends a git range at a moving ref: the right side of `A..B` / `A...B` (an empty right side means `HEAD`) in `git diff`, `log`, `rev-list` and the other range commands, or the last of two or more revisions of `git diff` / `git diff-tree`. Moving refs are `HEAD` in any form (`HEAD~N`, `HEAD^`, `@`, `@{…}`, `FETCH_HEAD`, `ORIG_HEAD`, `MERGE_HEAD`), `main`, `master`, anything under `origin/`, `upstream/`, `refs/heads/`, `refs/remotes/`, and any local or remote-tracking branch of the repository. Use a commit SHA (7+ hex, optionally `^`, `^N`, `~N`) or the placeholder `{order_commit}`, which `aos verify` resolves to the newest commit whose message has the trailer `Analucia-Order: ORD-NNNN` (`E_NO_ORDER_COMMIT` when none; the evidence shows the check as written and as resolved). Single revisions stay allowed, for example `--ref HEAD` to build the current tree and `git merge-base --is-ancestor <sha> HEAD`. The rule is an error for orders not yet admitted and for orders admitted with `pins.plugin` 0.3.0 or later; for orders admitted earlier it is a warning and the exit code does not change. `aos admit` refuses a verify file with the error.
 

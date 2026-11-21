@@ -25,6 +25,40 @@ export function reviewPath(root, path) {
 
 export const fileHash = (root, rel) => (existsSync(join(root, rel)) && statSync(join(root, rel)).isFile() ? hashLF(readFileSync(join(root, rel))) : null);
 
+// ORD-0042 part 9 (OBS-153): a document for the owner ends with the fixed section "## Decisiones". Each decision is one
+// question followed by its options, one per line ("- A) …", "- B) …"); a document with nothing to decide writes the
+// single line "Ninguna". Returns null when the section is right, else one sentence that says what to add.
+export const DECISIONS_HEADING = '## Decisiones';
+export function decisionsProblem(text) {
+  const lines = String(text).replace(/\r\n/g, '\n').split('\n');
+  const start = lines.findIndex((l) => /^## Decisiones\s*$/.test(l));
+  if (start === -1) return `the document has no section "${DECISIONS_HEADING}"; add at the end: ${DECISIONS_HEADING}, then each decision as one question followed by its options ("- A) …", "- B) …"), or the single line Ninguna`;
+  const rest = lines.slice(start + 1);
+  const end = rest.findIndex((l) => /^#{1,2} /.test(l));
+  const body = (end === -1 ? rest : rest.slice(0, end)).map((l) => l.trim()).filter(Boolean);
+  if (!body.length) return `the section "${DECISIONS_HEADING}" is empty; write each decision as one question followed by its options, or the single line Ninguna`;
+  if (body.length === 1 && /^ninguna\.?$/i.test(body[0])) return null;
+  const isOption = (l) => /^[-*] [A-Za-z0-9]{1,2}\) \S/.test(l);
+  const questions = [];
+  let current = null;
+  for (const l of body) {
+    if (isOption(l)) {
+      if (!current) return `the section "${DECISIONS_HEADING}" has an option before any question ("${l}"); write the question on its own line first`;
+      current.options += 1;
+      if (!questions.includes(current)) questions.push(current);
+    } else {
+      current = { text: l, options: 0 };
+      if (/\?$/.test(l)) questions.push(current);
+    }
+  }
+  if (!questions.length) return `the section "${DECISIONS_HEADING}" has no decision; write each one as a question followed by its options, or the single line Ninguna`;
+  const few = questions.find((q) => q.options < 2);
+  if (few) return `the decision "${few.text}" has ${few.options} option(s); a decision needs at least two, one per line: "- A) …", "- B) …"`;
+  return null;
+}
+// Documents that are text and can carry the section; a picture or a rendered page is registered as before.
+const TEXT_DOC_RE = /\.(md|markdown|txt)$/i;
+
 export function requestReview(root, path, { order, agent, now = new Date() } = {}) {
   if (!order) throw new RuleError('E_MISSING_FIELD', 'a review needs --order ORD-NNNN: the order the document belongs to');
   const rel = reviewPath(root, path);
@@ -32,6 +66,10 @@ export function requestReview(root, path, { order, agent, now = new Date() } = {
   if (!sha256) throw new RuleError('E_FILE_MISSING', `${rel} does not exist or is not a file`);
   const { events } = readLog(root);
   if (!replay(events).records[order]) throw new RuleError('E_NO_ORDER', `${order} is not in the event log; a document is reviewed for an admitted order`);
+  if (TEXT_DOC_RE.test(rel)) {
+    const problem = decisionsProblem(readFileSync(join(root, rel), 'utf8'));
+    if (problem) throw new RuleError('E_REVIEW_DECISIONS', `${rel}: ${problem}`);
+  }
   appendEvent(root, { type: 'review.requested', actor: 'executor', subject: order, agent, payload: { path: rel, sha256, order } }, { now });
   return { path: rel, sha256, order };
 }
@@ -97,10 +135,13 @@ export function openWithSystemViewer(abs) {
 
 // The review part of "aos sign": for each waiting document, the owner types approve, comment, reject or open
 // (an empty answer leaves it for later). Returns the decisions made.
-export async function reviewDocuments(root, { t, ask, out, now = new Date(), open = openWithSystemViewer }) {
-  const waiting = waitingReviews(root);
+// ORD-0043 part 6: with `order`, only the documents of that order, together under one heading (`aos sign` shows
+// them right before the checks of the order); `announce: false` leaves the total line to the caller.
+export async function reviewDocuments(root, { t, ask, out, now = new Date(), open = openWithSystemViewer, order = null, announce = true }) {
+  const waiting = waitingReviews(root).filter((d) => !order || d.order === order);
   if (!waiting.length) return [];
-  out(t('review.waiting', { n: waiting.length }));
+  if (announce) out(t('review.waiting', { n: waiting.length }));
+  if (order) out(t('review.group', { order, n: waiting.length }));
   const made = [];
   for (const d of waiting) {
     const { title, summary } = describe(root, d.path);

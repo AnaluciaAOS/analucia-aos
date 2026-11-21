@@ -1,6 +1,6 @@
 {
   "name": "analucia",
-  "version": "0.5.0",
+  "version": "0.7.0",
   "description": "Analucia AOS core: orders, roles, evidence and an append-only event log.",
   "author": {
     "name": "Erwing Reyes"

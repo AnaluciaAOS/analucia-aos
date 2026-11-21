@@ -27,6 +27,8 @@ export const ORDER_KEYS = [
   'risk', 'cost_effect', 'rollback', // SPEC-0003 §4
   'workflow', // AMD-0007 §3: an optional template, not a lifecycle
   'continues', // AMD-0015 §2: free text naming the earlier record of the project the order continues
+  'replaces', // ORD-0042 part 7: inline list of paths of the project the work of the order replaces
+  'decision', // ORD-0042 part 6: one line of free text, the owner's decision the order carries out
 ];
 export const WORKFLOWS = ['qrspi'];
 const REVIEW_DECISIONS = ['approve', 'comment', 'reject']; // AMD-0007 §1
@@ -121,6 +123,12 @@ export function validateOrderText(text, fileName, { pinned = false } = {}) {
   }
 
   const get = (k) => fields.get(k);
+  const replaces = get('replaces');
+  if (replaces && !(Array.isArray(replaces.value) && replaces.value.every((p) => typeof p === 'string' && p.trim() !== '' && !/^([A-Za-z]:|[\\/])/.test(p) && !p.includes('\\') && !p.split('/').includes('..')))) {
+    errors.push(err(replaces.line, 'E_FIELD_TYPE', '"replaces" must be an inline list of paths of the project, relative, with "/" and no ".." ("replaces: []" when the order replaces nothing)'));
+  }
+  const decision = get('decision');
+  if (decision && (Array.isArray(decision.value) || !isNonEmptyString(decision.value))) errors.push(err(decision.line, 'E_FIELD_TYPE', '"decision" must be one line of text: the decision of the owner this order carries out'));
   const continues = get('continues');
   if (continues && (Array.isArray(continues.value) || !isNonEmptyString(continues.value))) errors.push(err(continues.line, 'E_FIELD_TYPE', '"continues" must be one line of text naming the earlier record this order continues'));
   const id = get('id');
@@ -253,7 +261,7 @@ export const askBody = (text) => {
 
 // ---------- project.json ----------
 
-const PROJECT_KEYS = ['project_code', 'wip_limit', 'budget', 'reversible', 'deploy', 'protected_branches', 'ownership_boundaries', 'locale', 'github_owner', 'budget_monthly_usd', 'budget_currency', 'timezone', 'hosting', 'hosting_where'];
+const PROJECT_KEYS = ['project_code', 'push_accounts', 'wip_limit', 'budget', 'reversible', 'deploy', 'protected_branches', 'ownership_boundaries', 'locale', 'github_owner', 'budget_monthly_usd', 'budget_currency', 'timezone', 'hosting', 'hosting_where', 'owner_data'];
 const HOSTING_CHOICES = ['managed', 'own-server', 'already', 'later']; // AMD-0006
 
 function lineOfKey(text, key) {
@@ -300,6 +308,8 @@ export function validateProjectText(text) {
   for (const k of ['reversible', 'protected_branches']) {
     if (k in p && !(Array.isArray(p[k]) && p[k].every((v) => typeof v === 'string'))) errors.push(err(at(k), 'E_FIELD_TYPE', `"${k}" must be a list of strings`));
   }
+  // ORD-0043 part 14: the path patterns of the files only the owner writes; an agent never writes them (E_OWNER_DATA).
+  if ('owner_data' in p && !(Array.isArray(p.owner_data) && p.owner_data.every((v) => isNonEmptyString(v)))) errors.push(err(at('owner_data'), 'E_FIELD_TYPE', '"owner_data" must be a list of path patterns (non-empty strings)'));
   if ('ownership_boundaries' in p && !isObject(p.ownership_boundaries)) errors.push(err(at('ownership_boundaries'), 'E_FIELD_TYPE', '"ownership_boundaries" must be an object'));
   if ('locale' in p && !isNonEmptyString(p.locale)) errors.push(err(at('locale'), 'E_FIELD_TYPE', '"locale" must be a non-empty string'));
   if ('github_owner' in p && !isNonEmptyString(p.github_owner)) errors.push(err(at('github_owner'), 'E_FIELD_TYPE', '"github_owner" must be a non-empty string'));
@@ -316,11 +326,28 @@ export function validateProjectText(text) {
   }
   if ('hosting' in p && !HOSTING_CHOICES.includes(p.hosting)) errors.push(err(at('hosting'), 'E_FIELD_TYPE', `"hosting" must be one of: ${HOSTING_CHOICES.join(', ')}`));
   if ('hosting_where' in p && !(p.hosting === 'already' && isNonEmptyString(p.hosting_where))) errors.push(err(at('hosting_where'), 'E_FIELD_TYPE', '"hosting_where" must be a non-empty string, only with "hosting": "already"'));
+  // ORD-0042 part 5: push_accounts, a map from remote name to the account that pushes to it.
+  if ('push_accounts' in p) {
+    const ok = isObject(p.push_accounts) && Object.entries(p.push_accounts).every(([remote, account]) => /^[A-Za-z0-9._-]+$/.test(remote) && typeof account === 'string' && /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/.test(account));
+    if (!ok) errors.push(err(at('push_accounts'), 'E_FIELD_TYPE', '"push_accounts" must be an object {"<remote name>": "<GitHub account name>"}'));
+  }
   if ('budget_currency' in p && !isNonEmptyString(p.budget_currency)) errors.push(err(at('budget_currency'), 'E_FIELD_TYPE', '"budget_currency" must be a non-empty string'));
   return errors;
 }
 
 // ---------- Director files: verify files and the lock (SPEC-0002 §1, §2, §5) ----------
+
+// ORD-0043 part 2: the classes of a check, and the commands that are substance by nature. Returns what the command
+// runs, in words, or null.
+export const CHECK_CLASSES = ['form', 'substance'];
+const SUBSTANCE_COMMANDS = [
+  [/\bnode\s+(?:--[\w-]+(?:=\S+)?\s+)*--test\b|\bnpm\s+(?:run\s+)?test\b/, 'the test suite'],
+  [/\baos(?:\.mjs)?["']?\s+verify-log\b/, 'aos verify-log'],
+  [/\baos(?:\.mjs)?["']?\s+validate\b/, 'aos validate'],
+  [/\baos(?:\.mjs)?["']?\s+check-roles\b/, 'aos check-roles'],
+  [/\brelease-guard\b/, 'the release guard'],
+];
+export const substanceByNature = (run) => SUBSTANCE_COMMANDS.find(([re]) => re.test(String(run)))?.[1] ?? null;
 
 // `movingRefs` ({ severity: 'error' | 'warning', branches }) turns on the ORD-0034 rule: a check may not end a
 // git range at a moving ref. Findings carry `severity`; a warning never changes the exit code.
@@ -330,7 +357,7 @@ export function validateVerifyText(text, fileName, { movingRefs = null } = {}) {
   if (!isObject(v)) return [err(1, 'E_FIELD_TYPE', 'a verify file must be a JSON object')];
   const errors = [];
   const at = (k) => lineOfKey(text, k);
-  for (const k of Object.keys(v)) if (!['order', 'checks', 'preflight'].includes(k)) errors.push(err(at(k), 'E_UNKNOWN_KEY', `key "${k}" is not allowed in a verify file`));
+  for (const k of Object.keys(v)) if (!['order', 'checks', 'preflight', 'report_lines'].includes(k)) errors.push(err(at(k), 'E_UNKNOWN_KEY', `key "${k}" is not allowed in a verify file`));
   // AMD-0015 §4: `preflight`, a list of checks with the shape of `checks`, meant to pass on the untouched tree before
   // any work. A verify file without it is valid.
   if ('preflight' in v) {
@@ -345,6 +372,26 @@ export function validateVerifyText(text, fileName, { movingRefs = null } = {}) {
       return undefined;
     });
   }
+  // ORD-0043 part 13: `report_lines`, the lines the report of the order must carry: a list of { name, pattern },
+  // each pattern a regular expression of one line. `aos verify` checks each one as a check of class form.
+  if ('report_lines' in v) {
+    if (!Array.isArray(v.report_lines) || v.report_lines.length === 0) errors.push(err(at('report_lines'), 'E_FIELD_TYPE', '"report_lines" must be a non-empty list of { "name", "pattern" } (leave the key out when there is none)'));
+    else v.report_lines.forEach((c, i) => {
+      const where = `report_lines[${i}]`;
+      if (!isObject(c)) return errors.push(err(at('report_lines'), 'E_FIELD_TYPE', `${where} must be an object`));
+      for (const k of Object.keys(c)) if (!['name', 'pattern'].includes(k)) errors.push(err(at('report_lines'), 'E_UNKNOWN_KEY', `${where}: key "${k}" is not allowed`));
+      for (const k of ['name', 'pattern']) {
+        if (!(k in c)) errors.push(err(at('report_lines'), 'E_MISSING_FIELD', `${where}: key "${k}" is missing`));
+        else if (!isNonEmptyString(c[k])) errors.push(err(at('report_lines'), 'E_FIELD_TYPE', `${where}: "${k}" must be a non-empty string`));
+      }
+      if (isNonEmptyString(c.pattern)) {
+        let ok = !/[\r\n]/.test(c.pattern);
+        try { new RegExp(c.pattern); } catch { ok = false; }
+        if (!ok) errors.push(err(at('report_lines'), 'E_FIELD_TYPE', `${where}: "pattern" must be a regular expression of one line`));
+      }
+      return undefined;
+    });
+  }
   if (!('order' in v)) errors.push(err(1, 'E_MISSING_FIELD', 'key "order" is missing'));
   else if (!(typeof v.order === 'string' && ORDER_ID_RE.test(v.order))) errors.push(err(at('order'), 'E_ID_FORMAT', `order ${JSON.stringify(v.order)} is not an order ID`));
   else if (fileName && basename(fileName, '.json') !== v.order) errors.push(err(at('order'), 'E_ID_MISMATCH', `order "${v.order}" does not equal the file name "${basename(fileName)}"`));
@@ -353,8 +400,17 @@ export function validateVerifyText(text, fileName, { movingRefs = null } = {}) {
   else v.checks.forEach((c, i) => {
     const where = `checks[${i}]`;
     if (!isObject(c)) return errors.push(err(at('checks'), 'E_FIELD_TYPE', `${where} must be an object`));
-    for (const k of Object.keys(c)) if (!['name', 'run', 'expect_exit'].includes(k)) errors.push(err(at(k), 'E_UNKNOWN_KEY', `${where}: key "${k}" is not allowed`));
+    for (const k of Object.keys(c)) if (!['name', 'run', 'expect_exit', 'class'].includes(k)) errors.push(err(at(k), 'E_UNKNOWN_KEY', `${where}: key "${k}" is not allowed`));
     for (const k of ['name', 'run', 'expect_exit']) if (!(k in c)) errors.push(err(at('checks'), 'E_MISSING_FIELD', `${where}: key "${k}" is missing`));
+    // ORD-0043 part 2: a check may carry "class": "form"; without the key it is a check of substance. The work, the
+    // tests, the log, the order files, the roles and the release guard are substance and can never be marked form.
+    if ('class' in c) {
+      if (!CHECK_CLASSES.includes(c.class)) errors.push(err(at('class'), 'E_FIELD_TYPE', `${where}: "class" must be one of: ${CHECK_CLASSES.join(', ')} (leave the key out for a check of substance)`));
+      else if (c.class === 'form' && isNonEmptyString(c.run)) {
+        const what = substanceByNature(c.run);
+        if (what) errors.push(err(at('class'), 'E_FORM_CLASS', `${where} (check ${i + 1}, "${c.name}"): a check that runs ${what} is a check of substance and cannot carry "class": "form"; the owner can waive only a check of form`));
+      }
+    }
     for (const k of ['name', 'run']) if (k in c && !isNonEmptyString(c[k])) errors.push(err(at(k), 'E_FIELD_TYPE', `${where}: "${k}" must be a non-empty string`));
     if ('expect_exit' in c && !(Number.isInteger(c.expect_exit) && c.expect_exit >= 0 && c.expect_exit <= 255)) {
       errors.push(err(at('expect_exit'), 'E_FIELD_TYPE', `${where}: "expect_exit" must be an integer 0-255`));
@@ -493,6 +549,14 @@ function validatePayload(e, line) {
       break;
     case 'record.created':
       if ('pins' in p) errors.push(...validatePins(p.pins, line));
+      break;
+    // ORD-0042 part 6: the owner's decision that an order, an amendment or a batch carries out.
+    case 'decision.recorded':
+      if (!['owner', 'director'].includes(e.actor)) errors.push(err(line, 'E_ACTOR_ENUM', 'decision.recorded is written by actor owner or director'));
+      if (!isNonEmptyString(p.text)) errors.push(err(line, 'E_MISSING_FIELD', 'decision.recorded needs payload.text (one line)'));
+      if ('source' in p && p.source !== null && typeof p.source !== 'string') errors.push(err(line, 'E_FIELD_TYPE', 'payload.source must be text or null'));
+      if (!(Array.isArray(p.orders) && p.orders.length && p.orders.every((o) => typeof o === 'string' && RECORD_ID_RE.test(o)))) errors.push(err(line, 'E_REF_FORMAT', 'decision.recorded needs payload.orders: a list of record IDs'));
+      if ('business_rules' in p && !(Array.isArray(p.business_rules) && p.business_rules.every((r) => typeof r === 'string'))) errors.push(err(line, 'E_FIELD_TYPE', 'payload.business_rules must be a list of text'));
       break;
     // AMD-0007 §1: a document registered for the owner's review, and the owner's decision about that content.
     case 'review.requested':

@@ -11,6 +11,18 @@ import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 export const MANIFEST = '.analucia/release/manifest.txt';
+// ORD-0043 part 7: the private repository names its marketplace analucia-aos-private; the public tree keeps this name.
+export const PUBLIC_MARKETPLACE = 'analucia-aos';
+export const MARKETPLACE_FILE = '.claude-plugin/marketplace.json';
+// The bytes of one public file as they are written: only the name of the marketplace is rewritten.
+export function publicBytes(path, bytes) {
+  if (path !== MARKETPLACE_FILE) return bytes;
+  const text = bytes.toString('utf8');
+  if (JSON.parse(text).name === PUBLIC_MARKETPLACE) return bytes;
+  const next = text.replace(/("name"\s*:\s*")[^"]*(")/, `$1${PUBLIC_MARKETPLACE}$2`);
+  if (JSON.parse(next).name !== PUBLIC_MARKETPLACE) throw new Error(`${MARKETPLACE_FILE}: the marketplace name could not be set`);
+  return Buffer.from(next, 'utf8');
+}
 
 // "*" stays inside one folder, "**" matches any depth; everything else is literal.
 export function globToRegExp(glob) {
@@ -101,7 +113,8 @@ function main(argv) {
     const e = byPath.get(p);
     const dest = join(out, ...p.split('/'));
     mkdirSync(dirname(dest), { recursive: true });
-    writeFileSync(dest, blobs.get(e.blob));
+    writeFileSync(dest, publicBytes(p, blobs.get(e.blob)));
+    if (p === MARKETPLACE_FILE) process.stdout.write(`build-public-tree: marketplace name: ${PUBLIC_MARKETPLACE}\n`);
     if (e.mode === '100755') chmodSync(dest, 0o755);
   }
   process.stdout.write(`build-public-tree: ${c.public.length} file(s) written to ${out}\n`);

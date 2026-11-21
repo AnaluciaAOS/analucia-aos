@@ -112,12 +112,12 @@ test('the safe defaults are applied when answers are unknown', async () => {
   assert.deepEqual(a, {
     purpose: 'Demo shop', in_use: 'yes', end_user_input: 'unsure', how_verified: 'person', never_leaves: [],
     delivered_when: 'when the checks pass and the owner looked at it', wip_limit: 1, external_artifacts: [],
-    github_owner: 'example', cloud_sessions: 'no', executor_tool: 'claude-code', approve_from: 'sheet', owner_locale: 'en', project_code: '',
+    github_owner: 'example', cloud_sessions: 'no', executor_tool: 'claude-code', approve_from: 'sheet', owner_locale: 'en', project_code: '', owner_data: [],
     hosting: 'later', deploy_target: 'none', domain: '', budget_monthly_usd: 0, risk_default: 'medium',
   });
   assert.ok(Object.values(r.resolved.answers).filter((v) => v.source === 'default').length === QUESTIONS.length - 1);
   assert.equal(JSON.parse(readFileSync(join(root, '.analucia', 'project.json'), 'utf8')).budget_monthly_usd, undefined, 'unknown budget: alerts off');
-  assert.ok(r.resolved.notices.length >= QUESTIONS.length - 1, 'every default is said');
+  assert.ok(r.resolved.notices.length >= QUESTIONS.length - 2, 'every default is said (but the owner data, which is allowed to stay empty)');
   // A known budget and a high default risk change the mechanisms.
   await runInit(root, { provided: { budget_monthly_usd: 120, risk_default: 'high', never_leaves: ['secrets/**', 'customer data'] }, locale: 'en', ...CONFIRM, out });
   assert.equal(JSON.parse(readFileSync(join(root, '.analucia', 'project.json'), 'utf8')).budget_monthly_usd, 120);

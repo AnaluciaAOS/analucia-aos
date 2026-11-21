@@ -154,7 +154,9 @@ test('the permission profile: git push under ask, force push under deny, foreign
   assert.deepEqual(s.extraKnownMarketplaces, { 'analucia-aos': { source: { source: 'github', repo: 'example/analucia-aos' } } });
   assert.equal(readFileSync(join(root, '.claude', 'settings.local.json'), 'utf8'), local);
   assert.equal(permissionsWrite(root, { marketplace: mp }).changed, false, 'idempotent');
-  assert.deepEqual(PROFILE.ask, ['Bash(git push *)']);
+  // ORD-0043 part 16: no broad ask for a push (it would beat the allow); the asks are the bare forms and the protected branches.
+  assert.deepEqual(PROFILE.ask, []);
+  assert.ok(s.permissions.allow.includes('Bash(git push origin *)'));
 });
 
 // ORD-0033 C.2: a public checkout built from the release manifest is a plain folder (no git init), so git cannot

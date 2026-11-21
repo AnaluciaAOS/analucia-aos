@@ -25,6 +25,52 @@ const TEMPLATES = fileURLToPath(new URL('../templates/', import.meta.url));
 const draftsDir = (root) => join(root, '.analucia', 'drafts');
 const git = (root, args) => spawnSync('git', ['-C', root, ...args], { encoding: 'utf8' });
 
+// ORD-0042 part 10 (OBS-154): the fixed section "## Business rules" of an order. One rule per list item, each with one
+// example with numbers; an order with none writes the single item "- none". Returns undefined when the order has
+// no such section, else the rules as text (an empty list for "- none").
+export const BUSINESS_RULES_HEADING = '## Business rules';
+const NONE_RE = /^none\.?$/i;
+function businessRuleItems(text) {
+  const lines = String(text).replace(/\r\n/g, '\n').split('\n');
+  const start = lines.findIndex((l) => /^## Business rules\s*$/.test(l));
+  if (start === -1) return undefined;
+  const items = [];
+  for (const l of lines.slice(start + 1)) {
+    if (/^#{1,6} /.test(l)) break;
+    const m = /^\s*(?:[-*+]|\d+\.)\s+(.*)$/.exec(l);
+    if (m) items.push(m[1].trim());
+    else if (l.trim() && items.length) items[items.length - 1] = `${items.at(-1)} ${l.trim()}`;
+  }
+  return items;
+}
+export function businessRulesOf(text) {
+  const items = businessRuleItems(text);
+  if (items === undefined) return undefined;
+  return items.filter((i) => !NONE_RE.test(i));
+}
+// The reasons the section of a draft is not ready ([] when it is right, or when the draft has no section).
+function businessRuleProblems(text, where) {
+  const items = businessRuleItems(text);
+  if (items === undefined) return [];
+  const out = [];
+  if (!items.length) out.push(`E_FIELD_TYPE ${where}: the section "${BUSINESS_RULES_HEADING}" is empty: list each rule with one example with numbers, or write the single item "- none"`);
+  if (items.some((i) => NONE_RE.test(i)) && items.length > 1) out.push(`E_FIELD_TYPE ${where}: "- none" is the only item of the section when there is no rule; here it stands next to ${items.length - 1} other item(s)`);
+  items.forEach((item, i) => {
+    if (!NONE_RE.test(item) && !/\d/.test(item)) out.push(`E_FIELD_TYPE ${where}: business rule ${i + 1} ("${item}") has no example with numbers: say what the rule gives for one real case`);
+  });
+  return out;
+}
+
+// One front-matter key of an order text, as one line of text, or null.
+const orderKey = (text, key) => {
+  try {
+    const v = parseFrontMatter(text).fields.get(key)?.value;
+    return typeof v === 'string' && v.trim() ? v.trim() : null;
+  } catch {
+    return null;
+  }
+};
+
 const readEvents = (root) => {
   try {
     return readFileSync(logPath(root), 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l));
@@ -57,6 +103,18 @@ export function listDrafts(root) {
       for (const p of validateOrderText(text, `${id}.md`, { pinned: true })) problems.push(`${p.code} ${order}:${p.line}: ${p.message}`);
       let risk;
       try { risk = parseFrontMatter(text).fields.get('risk')?.value; } catch { /* reported above */ }
+      // ORD-0042 part 7: a draft that builds says what it replaces (placed orders and aos validate are not asked).
+      let kind;
+      let hasReplaces = false;
+      try {
+        const fm = parseFrontMatter(text).fields;
+        kind = fm.get('kind')?.value;
+        hasReplaces = fm.has('replaces');
+      } catch { /* reported above */ }
+      // ORD-0042 part 10: the business rules of the draft, each with its example with numbers.
+      problems.push(...businessRuleProblems(text, order));
+      if (kind === 'build' && businessRulesOf(text) === undefined) problems.push(`E_MISSING_FIELD ${order}: a draft of kind build has no section "${BUSINESS_RULES_HEADING}": list each rule with one example with numbers, or write the single item "- none"`);
+      if (kind === 'build' && !hasReplaces) problems.push(`E_MISSING_FIELD ${order}: a draft of kind build does not say what it replaces: list the paths in "replaces: […]", or write "replaces: []" when it replaces nothing`);
       if (risk === 'high') problems.push(`E_NO_ROLLBACK ${order}: a risk: high order needs a rollback plan listed in ${LOCK_REL}; drafts place only risk: low and medium`);
     }
     if (!verify) problems.push(`E_FILE_MISSING an order needs its verify file: write ${DRAFTS_REL}/${id}.json ({"order": "${id}", "checks": [{"name", "run", "expect_exit"}]})`);
@@ -67,7 +125,8 @@ export function listDrafts(root) {
     if (records[id] || existsSync(join(root, '.analucia', 'orders', `${id}.md`)) || existsSync(join(root, '.analucia', 'verify', `${id}.json`))) {
       problems.push(`E_RECORD_EXISTS ${id} already exists as a placed order: give the draft a new ID`);
     }
-    return { id, order, verify, title, problems, ok: problems.length === 0 };
+    const rules = order ? businessRulesOf(readFileSync(join(root, order), 'utf8')) ?? [] : [];
+    return { id, order, verify, title, problems, rules, ok: problems.length === 0 };
   });
 }
 
@@ -121,6 +180,14 @@ export function placeDrafts(root, { ids, now = new Date() } = {}) {
       else writeFileSync(join(root, LOCK_REL), before);
       refused.push({ id: d.id, problems: [`${x.code} ${x.message}`] });
       continue;
+    }
+    // ORD-0042 part 6: the owner's placement records the decision the draft carries (the key `decision:`), by itself.
+    // ORD-0042 part 10: the business rules the owner saw before his confirmation are recorded with it.
+    const placedText = readFileSync(join(root, `.analucia/orders/${d.id}.md`), 'utf8');
+    const text = orderKey(placedText, 'decision');
+    const rules = businessRulesOf(placedText) ?? [];
+    if (text || rules.length) {
+      appendEvent(root, { type: 'decision.recorded', actor: 'owner', subject: d.id, payload: { text: text ?? `Placement of ${d.id}: ${d.title || 'no title'}`, source: `.analucia/orders/${d.id}.md`, orders: [d.id], ...(rules.length ? { business_rules: rules } : {}) } }, { now });
     }
     for (const from of Object.values(targets)) rmSync(join(root, from), { force: true });
     placed.push(d.id);

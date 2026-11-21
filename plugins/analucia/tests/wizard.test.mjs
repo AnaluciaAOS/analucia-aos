@@ -75,8 +75,9 @@ test('the language question switches every later text, the plan and the CONFIRM 
   assert.equal(provided.owner_locale, 'es');
   assert.match(o.prompts[10], /^\nQuestion 11 of 15/);
   assert.match(o.prompts[11], /^\nPregunta 12 de 15 · Entorno/);
-  assert.match(o.prompts.at(-2), /Tus respuestas:/);
-  assert.match(o.prompts.at(-1), /Una más: elige un código corto/, 'the code question comes last, in the chosen language (AMD-0015 §8)');
+  assert.match(o.prompts.at(-3), /Tus respuestas:/);
+  assert.match(o.prompts.at(-2), /Una más: elige un código corto/, 'the code question comes after the summary, in the chosen language (AMD-0015 §8)');
+  assert.match(o.prompts.at(-1), /Una más: ¿qué archivos solo los escribes tú/, 'the owner data comes last, in the chosen language (ORD-0043 part 14)');
   const asked = [];
   const printed = [];
   await runInit(root, { provided, locale: 'en', isTTY: true, ask: async (q) => { asked.push(q); return 'CONFIRM'; }, out: (s) => printed.push(s), wizard: true });

@@ -124,6 +124,15 @@ export function buildViews(root) {
     out.push('', `## Documents waiting for the owner's review (${waiting.length})`, '');
     for (const d of waiting) out.push(`- ${d.path} (${d.order}): the owner decides in aos sign`);
   }
+  // ORD-0043 part 5: the handoff of an open run, while the run is open (the file is written by `aos run handoff`
+  // or by the PreCompact hook; this view only points at it and repeats what comes next).
+  const handoffs = active.map(([id]) => {
+    const rel = `.analucia/views/handoff-${id}.md`;
+    if (!existsSync(join(root, rel))) return null;
+    const next = /^- Next: (.*)$/m.exec(readFileSync(join(root, rel), 'utf8'))?.[1] ?? '';
+    return `- ${id}: read ${rel}, take the run with "aos run take ${id}" and go on. Next: ${next}`;
+  }).filter(Boolean);
+  if (handoffs.length) out.push('', '## Handoff of the open run', '', ...handoffs);
   out.push(...sessionLines(sessions));
   out.push('', `## Last ${Math.min(LAST_EVENTS, events.length)} events`, '');
   if (!events.length) out.push('- none');

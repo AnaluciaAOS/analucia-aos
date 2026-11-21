@@ -16,6 +16,10 @@ export const LAUNCHERS = [
   { name: 'DETENER', args: ['halt'] },
   { name: 'REANUDAR', args: ['resume'] },
   { name: 'IMPORTAR', args: ['ceo', 'import'], drop: true },
+  // ORD-0042 part 4: the one-click repair of the log (owner only; three conditions; lib/log-repair.mjs).
+  { name: 'REPARAR', args: ['repair-log'] },
+  // ORD-0043 part 7: the plugin is updated by a click (any role may run it: it changes no project file).
+  { name: 'ACTUALIZAR', args: ['update'] },
 ];
 export const LAUNCHER_NAMES = LAUNCHERS.map((l) => l.name);
 // The launcher file a person clicks on this platform.
@@ -31,13 +35,18 @@ export const RUNNER = [
   "let aos=path.join(here,'plugins','analucia','bin','aos.mjs');",
   'if(!fs.existsSync(aos)){',
   "const cfg=(process.env.CLAUDE_CONFIG_DIR||'').trim()||path.join(os.homedir(),'.claude');",
-  "const base=path.join(cfg,'plugins','cache','analucia-aos','analucia');",
+  "const cache=path.join(cfg,'plugins','cache');",
   "const num=(v)=>v.split('.').map(Number);",
-  'const versions=(fs.existsSync(base)?fs.readdirSync(base):[])',
-  ".filter((v)=>v.split('.').length===3&&v.split('.').every((n)=>String(Number(n))===n)&&fs.existsSync(path.join(base,v,'bin','aos.mjs')))",
-  '.sort((x,y)=>{const a=num(x),b=num(y);return a[0]-b[0]||a[1]-b[1]||a[2]-b[2];});',
-  `if(!versions.length)process.exit(${NOT_FOUND_EXIT});`,
-  "aos=path.join(base,versions[versions.length-1],'bin','aos.mjs');",
+  'const found=[];',
+  // every marketplace the plugin was installed from: the public one and the private one have their own names
+  'for(const m of (fs.existsSync(cache)?fs.readdirSync(cache):[])){',
+  "const base=path.join(cache,m,'analucia');",
+  'for(const v of (fs.existsSync(base)?fs.readdirSync(base):[])){',
+  "if(v.split('.').length===3&&v.split('.').every((n)=>String(Number(n))===n)&&fs.existsSync(path.join(base,v,'bin','aos.mjs')))found.push([v,path.join(base,v,'bin','aos.mjs')]);",
+  '}}',
+  'found.sort((x,y)=>{const a=num(x[0]),b=num(y[0]);return a[0]-b[0]||a[1]-b[1]||a[2]-b[2];});',
+  `if(!found.length)process.exit(${NOT_FOUND_EXIT});`,
+  'aos=found[found.length-1][1];',
   '}',
   "const r=cp.spawnSync(process.execPath,[aos,...process.argv.slice(2)],{stdio:'inherit'});",
   'process.exit(r.status===null?1:r.status);',

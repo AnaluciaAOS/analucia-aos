@@ -12,14 +12,16 @@ export const PLUGIN_DIR = posix(fileURLToPath(new URL('../', import.meta.url))).
 export const AOS_BIN = `${PLUGIN_DIR}/bin/aos.mjs`;
 export const PLUGIN = 'analucia';
 export const MARKETPLACE = { name: 'analucia-aos', url: 'https://github.com/AnaluciaAOS/analucia-aos.git' };
+// ORD-0043 part 7: the private repository has its own marketplace name; an installation from either one counts.
+export const MARKETPLACE_NAMES = [MARKETPLACE.name, 'analucia-aos-private'];
 
 // The command that runs aos here: node "<absolute path>/bin/aos.mjs" (quoted: Windows user folders may hold spaces).
 export const aosCommand = () => `node "${AOS_BIN}"`;
 
 // The aos subcommands (bin/aos.mjs), so prose like "run aos validate" can be turned into a command that exists.
-export const SUBCOMMANDS = ['backup', 'review', 'workflow', 'pause', 'resume-order', 'sign', 'metrics', 'adopt', 'eval', 'init', 'permissions',
+export const SUBCOMMANDS = ['backup', 'review', 'workflow', 'pause', 'resume-order', 'unblock', 'sign', 'metrics', 'adopt', 'eval', 'init', 'permissions',
   'role', 'ask', 'ceo', 'admit', 'cost', 'explain', 'validate', 'event', 'verify-log', 'derive', 'history', 'run', 'verify', 'close', 'halt',
-  'resume', 'check-writeback', 'hook', 'agents-md', 'check-roles', 'check-push', 'install-git-hooks', 'next', 'launchers', 'drafts', 'ids', 'docs', 'preflight'];
+  'resume', 'check-writeback', 'hook', 'agents-md', 'check-roles', 'check-push', 'install-git-hooks', 'next', 'launchers', 'drafts', 'ids', 'docs', 'preflight', 'repair-log', 'status', 'decision', 'replaced', 'update', 'scratch', 'trailer', 'report', 'tracked'];
 const SUB = [...SUBCOMMANDS].sort((a, b) => b.length - a.length).join('|');
 const COMMAND_RE = new RegExp(`node plugins/analucia/bin/aos\\.mjs|\\{aos\\}|(?<![\\w/.-])aos (?=(?:${SUB})\\b)|plugins/analucia/(core|lib|docs|templates)/`, 'g');
 
@@ -61,9 +63,10 @@ export function pluginInstall(configDir = claudeConfigDir()) {
   const read = (f) => {
     try { return JSON.parse(readFileSync(join(configDir, 'plugins', f), 'utf8')); } catch { return null; }
   };
-  const entries = read('installed_plugins.json')?.plugins?.[`${PLUGIN}@${MARKETPLACE.name}`] ?? [];
+  const plugins = read('installed_plugins.json')?.plugins ?? {};
+  const entries = MARKETPLACE_NAMES.flatMap((m) => (Array.isArray(plugins[`${PLUGIN}@${m}`]) ? plugins[`${PLUGIN}@${m}`] : []));
   const known = read('known_marketplaces.json');
-  return { entries: Array.isArray(entries) ? entries : [], marketplaceKnown: Boolean(known && known[MARKETPLACE.name]) };
+  return { entries, marketplaceKnown: Boolean(known && known[MARKETPLACE.name]) };
 }
 
 const samePath = (a, b) => {

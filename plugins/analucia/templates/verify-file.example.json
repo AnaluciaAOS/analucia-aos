@@ -5,6 +5,11 @@
       "name": "specs unchanged by this order (fixed range: base SHA to {order_commit}, never HEAD)",
       "run": "git diff --quiet 8ea118d {order_commit} -- core",
       "expect_exit": 0
+    },
+    {
+      "name": "every commit of this order that changes code carries its trailer (the rule of the push guard; never a hand-written check)",
+      "run": "node plugins/analucia/bin/aos.mjs trailer check ORD-NNNN --from 8ea118d",
+      "expect_exit": 0
     }
   ]
 }

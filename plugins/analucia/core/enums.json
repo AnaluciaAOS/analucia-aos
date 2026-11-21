@@ -66,6 +66,7 @@
     "blocked",
     "needs_decision",
     "budget_exhausted",
+    "parts_cap",
     "failed"
   ],
   "evidence_levels": [
@@ -112,7 +113,8 @@
     "review.decision",
     "session.start",
     "session.end",
-    "backup.pushed"
+    "backup.pushed",
+    "decision.recorded"
   ],
   "relation_fields": [
     "parent",

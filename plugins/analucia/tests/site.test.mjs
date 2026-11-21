@@ -98,7 +98,10 @@ test('no forbidden word, no price figure; the view-4 table shows no numbers', ()
 
 test('the install commands are real: read from README.md, .claude-plugin/marketplace.json and the plugin manifest', () => {
   const readme = readFileSync(join(ROOT, 'README.md'), 'utf8');
-  const market = JSON.parse(readFileSync(join(ROOT, '.claude-plugin', 'marketplace.json'), 'utf8'));
+  // ORD-0043 part 7: the site and the README name the public marketplace; the private repository has its own name,
+  // which the public tree never carries (scripts/build-public-tree.mjs writes the public one).
+  const market = { name: 'analucia-aos' };
+  assert.ok(['analucia-aos-private', market.name].includes(JSON.parse(readFileSync(join(ROOT, '.claude-plugin', 'marketplace.json'), 'utf8')).name));
   const plugin = JSON.parse(readFileSync(join(ROOT, 'plugins', 'analucia', '.claude-plugin', 'plugin.json'), 'utf8'));
   const html = read('index.html');
   const code = (id) => new RegExp(`<code id="${id}">([^<]+)</code>`).exec(html)[1];

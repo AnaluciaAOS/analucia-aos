@@ -1,0 +1,7 @@
+{
+  "order": "ORD-9999",
+  "checks": [
+    { "name": "the label of the report", "run": "grep -q '^Work: ' report.md", "expect_exit": 0, "class": "form" },
+    { "name": "test suite passes", "run": "node --test plugins/analucia/tests", "expect_exit": 0, "class": "form" }
+  ]
+}

@@ -106,7 +106,9 @@ test('verify CLI prints PASS lines while running, and "sample 1 of 2" / "sample 
   const high = delivered({ risk: 'high', checks: [{ name: 'a', run: 'exit 0', expect_exit: 0 }] });
   const h = aos(high, ['verify', 'ORD-0001']);
   assert.equal(h.status, 0, h.stderr);
-  assert.deepEqual(h.stdout.trim().split('\n').slice(0, 4), ['sample 1 of 2', 'PASS a (exit 0)', 'sample 2 of 2', 'PASS a (exit 0)']);
+  // ORD-0043 part 17: a high order is run once too; no "sample" lines.
+  assert.deepEqual(h.stdout.trim().split('\n').slice(0, 1), ['PASS a (exit 0)']);
+  assert.doesNotMatch(h.stdout, /sample/);
 
   const failing = delivered({ checks: [{ name: 'bad', run: 'exit 1', expect_exit: 0 }] });
   const f = aos(failing, ['verify', 'ORD-0001']);

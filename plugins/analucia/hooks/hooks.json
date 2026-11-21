@@ -1,5 +1,5 @@
 {
-  "description": "Analucia AOS guards (SPEC-0002 §4): resume at start, sessions (AMD-0007), no silent ending, off switch and protected paths; sessions named by role (ORD-0041 part 3).",
+  "description": "Analucia AOS guards (SPEC-0002 §4): resume at start, sessions (AMD-0007), no silent ending, off switch and protected paths; sessions named by role (ORD-0041 part 3); a prompt of another project gets a warning line (ORD-0042 part 8).",
   "hooks": {
     "SessionStart": [
       {
@@ -61,7 +61,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/bin/aos.mjs\" hook session-name"
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/bin/aos.mjs\" hook user-prompt"
           }
         ]
       }

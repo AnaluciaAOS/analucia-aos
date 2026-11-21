@@ -10,6 +10,10 @@ import { join, resolve, sep } from 'node:path';
 import { aosCommand } from './cli.mjs';
 import { DIRECTOR_ENTRY_REL, listDrafts } from './drafts.mjs';
 import { findRoot, openRuns } from './guards.mjs';
+import { handoffRel } from './handoff.mjs';
+import { declaredDirector } from './session-names.mjs';
+import { repairPlan } from './log-repair.mjs';
+import { blockEnded, lastPreflight } from './lifecycle.mjs';
 import { launcherAt } from './launchers.mjs';
 import { personLocale } from './locale.mjs';
 import { logPath, readLog, verifyChain } from './log.mjs';
@@ -19,12 +23,13 @@ import { buildQueue } from './queue.mjs';
 import { reviewState } from './review.mjs';
 import { replay } from './state.mjs';
 
+const UNBLOCK_HINT = 'why the block has ended'; // the placeholder of the command, as the command is typed
 const posix = (p) => resolve(p).split(sep).join('/');
 const list = (ids, max = 3) => (ids.length > max ? `${ids.slice(0, max).join(', ')} +${ids.length - max}` : ids.join(', '));
 
 // start: the folder to look from. explicit: `start` is the project root itself (--root), not a place to search from.
 // Returns { who, key, vars, root } — the catalog key of the line and what it needs.
-export function nextStep(start, { explicit = false } = {}) {
+export function nextStep(start, { explicit = false, session = null } = {}) {
   const here = resolve(start);
   const root = explicit ? (existsSync(join(here, '.analucia')) ? here : null) : findRoot(here);
   const dir = posix(root ?? here);
@@ -42,6 +47,8 @@ export function nextStep(start, { explicit = false } = {}) {
   }
   if (root && existsSync(logPath(root))) {
     const broken = verifyChain(readFileSync(logPath(root)));
+    // ORD-0042 part 4: when only uncommitted session lines are affected, the owner repairs it by a click.
+    if (broken && repairPlan(root).repairable) return { who: 'owner', key: 'next.broken_repairable', vars: { line: broken.line, code: broken.code }, how: how('REPARAR', 'repair-log'), root };
     if (broken) return { who: 'director', key: 'next.broken_log', vars: { line: broken.line, code: broken.code, cmd: cmd('verify-log') }, root };
   }
   if (!root || !existsSync(logPath(root))) {
@@ -76,29 +83,47 @@ export function nextStep(start, { explicit = false } = {}) {
   const open = openRuns(events);
   if (open.length) {
     const { id, run } = open[0];
+    // ORD-0043 part 5: an executor session that is not the owner of the open run takes it, after reading the handoff.
+    const owner = open[0].session;
+    if (session && owner && owner !== session && !declaredDirector(root, session, events)) {
+      return { who: 'executor', key: 'next.take_run', vars: { id, run: run ?? '?', session: owner, handoff: handoffRel(id), cmd: cmd(`run take ${id}`) }, root };
+    }
     return { who: 'executor', key: 'next.open_run', vars: { id, run: run ?? '?', cmd: cmd(`run finish ${id} --outcome <outcome> --evidence .analucia/evidence/${id}/report.md`) }, root };
   }
+  // ORD-0043 part 6: an order the owner sent back for corrections is active with no open run.
+  const back = ids('active')[0];
+  if (back) return { who: 'executor', key: 'next.rework', vars: { id: back, cmd: cmd(`run start ${back}`) }, root };
   const blocked = ids('blocked');
+  // ORD-0042 part 2: a blocked order whose block has ended is the executor's to continue, with the command.
+  for (const id of blocked) {
+    const ended = blockEnded(events, id);
+    if (ended) return { who: 'executor', key: 'next.block_ended', vars: { id, cmd: cmd(`resume-order ${id}`) }, why: ended.by === 'ask' ? { key: 'next.ended_ask', vars: { ref: ended.ref } } : { key: 'next.ended_amendment', vars: { ref: ended.ref ?? '' } }, root };
+  }
   if (blocked.length) {
     const id = blocked[0];
     const who = nextActionBy(orders[id]);
-    return { who, key: 'next.blocked', vars: { who, id, by: orders[id].blocked_by ?? orders[id].reason ?? '' }, root };
+    // ORD-0043 part 3: the exact line — what it waits for (the recorded reason) and the command that takes it out.
+    return { who, key: 'next.blocked', vars: { who, id, by: orders[id].blocked_by ?? orders[id].reason ?? '', cmd: cmd(`resume-order ${id} --reason "<${UNBLOCK_HINT}>"`) }, root };
   }
   const notReady = drafts.filter((d) => !d.ok).map((d) => d.id);
   if (notReady.length) return { who: 'director', key: 'next.fix_drafts', vars: { n: notReady.length, ids: list(notReady), cmd: cmd('drafts') }, root };
   const queue = buildQueue(root, orders);
   const paused = queue.find((q) => q.state === 'paused');
   const queued = queue.find((q) => q.state === 'queued');
+  // ORD-0042 part 2: a queued order whose last recorded preflight failed has nothing to start: the director is told.
+  const pre = queued ? lastPreflight(root, queued.id) : null;
+  if (queued && pre?.result === 'failed') return { who: 'director', key: 'next.preflight_failed', vars: { id: queued.id, evidence: pre.evidence, cmd: cmd(`preflight ${queued.id}`) }, root };
+  if (queued && orders[queued.id]?.last_outcome === 'parts_cap') return { who: 'executor', key: 'next.queued_parts_cap', vars: { id: queued.id, continues: queued.continues, title: queued.title, cmd: cmd(`run start ${queued.id}`) }, root };
   if (queued) return { who: 'executor', key: 'next.queued', vars: { id: queued.id, continues: queued.continues, title: queued.title, cmd: cmd(`run start ${queued.id}`) }, root };
   if (paused) return { who: 'executor', key: 'next.paused', vars: { id: paused.id, cmd: cmd(`resume-order ${paused.id}`) }, root };
   return { who: 'owner', key: 'next.nothing', vars: { entry: DIRECTOR_ENTRY_REL }, root };
 }
 
 // The one line, in the project's language (the same fallback as every other line printed for a person).
-export function nextLine(start, { explicit = false, locale } = {}) {
+export function nextLine(start, { explicit = false, locale, session = null } = {}) {
   let step;
   try {
-    step = nextStep(start, { explicit });
+    step = nextStep(start, { explicit, session: typeof session === 'string' && session ? session : null });
   } catch (x) {
     // A log that cannot even be read is a broken log.
     step = { who: 'director', key: 'next.broken_log', vars: { line: '?', code: x.code ?? 'E_JSON', cmd: `${aosCommand()} verify-log` }, root: null };
@@ -106,6 +131,7 @@ export function nextLine(start, { explicit = false, locale } = {}) {
   const t = catalog(locale ?? personLocale(step.root));
   const vars = { ...step.vars };
   if (step.how) vars.how = t(step.how.key, step.how.vars);
+  if (step.why) vars.why = t(step.why.key, step.why.vars).trim();
   if (vars.continues) vars.id = `${vars.id} (${t('queue.continues')} ${vars.continues})`; // the earlier record it continues (AMD-0015 §2)
   if (step.what) vars.what = step.what.map((w) => t(w.key, w.vars)).join('; ');
   return t(step.key, vars).replace(/\s*\r?\n\s*/g, ' ').trim();

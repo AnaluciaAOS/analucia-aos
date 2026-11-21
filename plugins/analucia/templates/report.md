@@ -20,4 +20,5 @@ For every figure given to the owner:
 
 <What was left out, and what was not checked. "Nothing" only when it is true.>
 
-OUTCOME: <done | blocked | needs_decision | budget_exhausted | failed>
+Work: <complete | not complete>
+OUTCOME: <done | blocked | needs_decision | budget_exhausted | parts_cap | failed>

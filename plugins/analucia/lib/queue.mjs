@@ -3,7 +3,9 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { LOCALES, catalog } from './onboarding.mjs';
+import { readLog } from './log.mjs';
 import { nextActionBy } from './owner-sheet.mjs';
+import { metricOf, waivedOrders } from './status.mjs';
 import { parseFrontMatter } from './validate.mjs';
 
 // Terminal without a signature (rejected, superseded, cancelled) leaves the queue too: nothing is left to do.
@@ -35,17 +37,22 @@ export function buildQueue(root, orders) {
     placed.add(next);
     out.push(next);
   }
-  return out.map((id) => ({ id, state: orders[id].state, next: nextActionBy(orders[id]), title: info[id].title, depends_on: info[id].depends_on, continues: info[id].continues }));
+  // ORD-0042 part 6: the metric of each order that has a recorded decision (measured from the log).
+  let events = [];
+  try { events = readLog(root).events; } catch { /* no log: no metric */ }
+  return out.map((id) => ({ metric: metricOf(events, id), id, state: orders[id].state, next: nextActionBy(orders[id]), title: info[id].title, depends_on: info[id].depends_on, continues: info[id].continues }));
 }
 
-export function queueText(queue, locale = 'en') {
+export function queueText(queue, locale = 'en', waived = []) {
   const t = catalog(LOCALES.includes(locale) ? locale : 'en');
   const out = [`# ${t('queue.title')}`, '', t('queue.intro'), ''];
   if (!queue.length) out.push(t('queue.empty'));
+  // ORD-0043 part 2: the orders that were closed with checks of form waived by the owner.
+  const tail = waived.length ? ['', t('queue.waived_title'), ...waived.map((w) => `- ${w.id} — ${t('queue.waived', { n: w.n })}`)] : [];
   queue.forEach((q, i) => {
-    out.push(`${i + 1}. ${q.id}${q.continues ? ` (${t('queue.continues')} ${q.continues})` : ''} — ${t(`queue.state.${q.state}`)} (${q.state}) — ${t('queue.next')}: ${q.next}${q.title ? ` — ${q.title}` : ''}`);
+    out.push(`${i + 1}. ${q.id}${q.continues ? ` (${t('queue.continues')} ${q.continues})` : ''} — ${t(`queue.state.${q.state}`)} (${q.state}) — ${t('queue.next')}: ${q.next}${q.title ? ` — ${q.title}` : ''}${q.metric && q.metric.minutes !== null ? ` — ${t('queue.metric', { minutes: q.metric.minutes, steps: q.metric.owner_steps })}` : ''}`);
   });
-  return `${out.join('\n')}\n`;
+  return `${[...out, ...tail].join('\n')}\n`;
 }
 
 export function writeQueueView(root, queue) {
@@ -53,7 +60,9 @@ export function writeQueueView(root, queue) {
   try { locale = JSON.parse(readFileSync(join(root, '.analucia', 'project.json'), 'utf8')).locale ?? 'en'; } catch { /* default */ }
   const dir = join(root, '.analucia', 'views');
   mkdirSync(dir, { recursive: true });
-  const text = queueText(queue, locale);
+  let waived = [];
+  try { waived = waivedOrders(readLog(root).events); } catch { /* no log: nothing was waived */ }
+  const text = queueText(queue, locale, waived);
   writeFileSync(join(dir, 'queue.md'), text);
   return text;
 }

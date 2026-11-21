@@ -33,12 +33,12 @@ function fakeConfig(versions) {
 }
 const runner = (dir, args, extraEnv = {}) => spawnSync(process.execPath, ['-e', RUNNER, dir, ...args], { encoding: 'utf8', env: { ...env, ...extraEnv } });
 
-test('aos launchers install writes the five launchers as .cmd and .sh, in an empty folder, and is idempotent', () => {
+test('aos launchers install writes the launchers (five, and REPARAR since ORD-0042 part 4) as .cmd and .sh, in an empty folder, and is idempotent', () => {
   const dir = scratch();
   const r = aosIn(dir, ['launchers', 'install']);
   assert.equal(r.status, 0, r.stderr);
   const texts = Object.fromEntries(FILES.map((f) => [f, readFileSync(join(dir, f), 'utf8')]));
-  assert.equal(FILES.length, 10);
+  assert.equal(FILES.length, 14); // ACTUALIZAR since ORD-0043 part 7
   for (const f of FILES) assert.ok(r.stdout.includes(`${f}:`), `reported: ${f}`);
   for (const l of LAUNCHERS) {
     const line = l.args.join(' ');
@@ -48,14 +48,14 @@ test('aos launchers install writes the five launchers as .cmd and .sh, in an emp
     assert.match(texts[`${l.name}.sh`], /\nread -r _\n$/, 'the window stays open (.sh)');
     assert.doesNotMatch(texts[`${l.name}.sh`], /\r/);
   }
-  assert.deepEqual(LAUNCHERS.map((l) => [l.name, l.args.join(' ')]), [['INICIAR', 'init'], ['FIRMAR', 'sign'], ['DETENER', 'halt'], ['REANUDAR', 'resume'], ['IMPORTAR', 'ceo import']]);
+  assert.deepEqual(LAUNCHERS.map((l) => [l.name, l.args.join(' ')]), [['INICIAR', 'init'], ['FIRMAR', 'sign'], ['DETENER', 'halt'], ['REANUDAR', 'resume'], ['IMPORTAR', 'ceo import'], ['REPARAR', 'repair-log'], ['ACTUALIZAR', 'update']]);
   for (const [f, text] of Object.entries(texts)) {
     assert.ok(text.includes('CLAUDE_CONFIG_DIR'), `${f} honours CLAUDE_CONFIG_DIR`);
     for (const personal of [homedir(), homedir().replace(/\\/g, '/'), dir, dir.replace(/\\/g, '/'), tmpdir()]) assert.ok(!text.includes(personal), `${f} contains ${personal}`);
     assert.doesNotMatch(text, /[A-Za-z]:\\Users\\|\/home\/|\/Users\/|users[\\/]/i, f);
   }
   // Idempotent: a second run changes no byte and says so.
-  assert.deepEqual(installLaunchers(dir).map((x) => x.status), Array(10).fill('unchanged'));
+  assert.deepEqual(installLaunchers(dir).map((x) => x.status), Array(14).fill('unchanged'));
   aosIn(dir, ['launchers', 'install']);
   for (const f of FILES) assert.equal(readFileSync(join(dir, f), 'utf8'), texts[f], f);
   // A changed launcher is brought back.

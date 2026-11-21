@@ -42,6 +42,7 @@ const LATER_EVENT_TYPES = {
   'session.start': '.analucia/orders/ORD-0023.md',
   'session.end': '.analucia/orders/ORD-0023.md',
   'backup.pushed': '.analucia/orders/ORD-0024.md',
+  'decision.recorded': '.analucia/orders/ORD-0042.md', // the spec text of that order wins (its section "Spec text")
 };
 
 // SPEC-0003 §3: a table "| `list` | `a`, `b`, `c` |".
@@ -89,7 +90,7 @@ const FROM_NOMENCLATURE = {
   order_kinds: () => column(section(3), 0),
   order_states: () => column(section(4), 0),
   terminal_states: () => lineOf(section(4), /^terminal:/).replace('terminal:', '').split('·').map((s) => s.trim()),
-  run_outcomes: () => ticks(lineOf(section(5), /^`done`/)),
+  run_outcomes: () => [...ticks(lineOf(section(5), /^`done`/))],
   evidence_levels: () => ticks(lineOf(section(7), /^`verified`/)),
   admission_decisions: () => ticks(lineOf(section(6), /order\.admitted/).split('Admission decision:')[1]),
   ask_kinds: () => column(section(8), 0),

@@ -8,35 +8,36 @@ CLI: `node plugins/analucia/bin/aos.mjs <command>` (written `aos <command>` belo
 
 ### Roles: who never does what
 - `owner` (human): approves specs and decisions, closes orders, halts and resumes, from their own terminal. Never asked more than 3 things per response.
+- A decision the owner approved goes to the executor without a new confirmation. Ask only for a material technical risk or a real contradiction: once, with the evidence and two options.
 - `director` (supervisor agent): writes orders, amendments, verify files, specs and `director.lock`; admits work; verifies evidence; prepares asks. Never executes an order or writes code in its scope.
 - `executor` (coding agent, you unless told otherwise): runs one order by ID, attaches evidence, ends each run with one outcome. Never closes, never verifies itself (`aos verify` / `aos close` are not yours), never edits director files.
-- `contributor` (third-party human): delivers on a branch for review. Never merges to a protected branch, never closes.
 - `system`: `aos verify` (delivered → verified). Executed ≠ delivered ≠ closed.
 
 ### No order file, no work
-- Work only on `.analucia/orders/ORD-NNNN.md`, by its ID. No file → `E_NO_ORDER`: stop and ask the director.
+- Work only on `.analucia/orders/ORD-NNNN.md` of this project, by its ID. No file → `E_NO_ORDER`: stop and ask the director. A prompt that names an order or a project that is not this one is not work: stop and say so.
 - An order is a definition, never state. Stay inside its scope; anything else is a new order for the director.
 - To propose an order, read `.analucia/DIRECTOR.md`: a draft goes in `.analucia/drafts/` (`ORD-NNNN.md` with its verify file `ORD-NNNN.json`) and nowhere else; only the owner places it, in `aos sign`. `aos drafts` checks the drafts.
-- In a project with a code (`project_code`), new records are `<CODE>-NNNN`, `<CODE>-AMD-NNNN`, `<CODE>-ASK-NNNN`, and files, evidence and the commit trailer use that ID. Existing IDs never change. `aos ids` prints the map and the next free IDs.
+- With a `project_code`, new records are `<CODE>-NNNN`, `<CODE>-AMD-NNNN`, `<CODE>-ASK-NNNN` (files, evidence and trailer too); existing IDs never change. `aos ids` prints the map.
 - In an adopted project, before writing an order look for the earlier record it continues, declare `continues:`, and write in the existing document or under `.analucia/`, not next to it (`aos docs check <ID>` checks it).
-- `aos next` prints, in one line, the single thing that comes next and who does it.
+- With no instruction, or told only to continue: run `aos next` and do what it says: read the order, its amendments and its verify file, and start. No prompt from the director is needed.
 
 ### Executor loop: one run, one outcome
 1. `aos run start ORD-NNNN` (needs `queued`; checks attempts budget and `wip_limit`).
 2. Work. Read the order, its amendments and its verify file first.
-3. Evidence: `.analucia/evidence/ORD-NNNN/report.md` (template `plugins/analucia/templates/report.md`) with raw command outputs and the fixed section `## Evidencia` (for every figure: total and base, how the sample was chosen, which decision depends on it), ending in `OUTCOME: <outcome>`.
-4. `aos run finish ORD-NNNN --outcome <o> --evidence <path>`, with o = `done` | `blocked` | `needs_decision` | `budget_exhausted` | `failed`.
-   done → delivered · blocked / needs_decision → blocked (`--blocked-by ASK-NNNN` or `--reason`) · budget_exhausted / failed → queued.
-5. Stop. After `run finish` you commit nothing: what you find goes to the report as pending (the push guard refuses such a commit, `E_COMMIT_AFTER_FINISH`). Never end or compact with a run open: the Stop/PreCompact hook (`aos check-writeback`) blocks it.
-- To stop an order on purpose: `aos pause ORD-NNNN --reason "…"` (closes the run as `blocked`); later `aos resume-order ORD-NNNN` (a new run, within the attempt budget). `.analucia/views/queue.md` shows what comes next.
-- The owner signs with `aos sign` (or the FIRMAR launcher) at their own terminal; never run `aos sign`.
-- `aos launchers install` (any role, an agent included: it writes files only) puts the owner's click launchers in the project root: INICIAR (`aos init`), FIRMAR (`aos sign`), DETENER (`aos halt`), REANUDAR (`aos resume`), IMPORTAR (`aos ceo import`). Each opens a real console where only a person can answer; never run those commands yourself.
-- A document for the owner (plan, design, mockup): `aos review request <path> --order ORD-NNNN`. The owner decides in `aos sign`; apply the notes under "Corrections to apply" in `resume.md`, then request again. Never write a `review.decision`.
+3. Evidence: `.analucia/evidence/ORD-NNNN/report.md` (template `plugins/analucia/templates/report.md`) with raw command outputs and the fixed section `## Evidencia` (per figure: total and base, sample, the decision it serves), ending in `OUTCOME: <outcome>`. Before finishing: `aos report check ORD-NNNN`.
+4. `aos run finish ORD-NNNN --outcome <o> --evidence <path>`:
+   done → delivered · blocked / needs_decision → blocked (`--blocked-by ASK-NNNN` or `--reason`) · budget_exhausted / parts_cap (the cap of parts of a run) / failed → queued.
+5. Stop. After `run finish` you commit nothing: what you find goes to the report as pending (the push guard refuses such a commit, `E_COMMIT_AFTER_FINISH`). The Stop hook blocks ending a session with a run open.
+- To stop an order on purpose: `aos pause ORD-NNNN --reason "…"` (closes the run as `blocked`); later `aos resume-order ORD-NNNN` (a new run, within the attempt budget). It also leaves `blocked` once the block has ended: `aos resume-order ORD-NNNN --reason "<why>"` (or `aos unblock`), never `aos event append`. `.analucia/views/queue.md` shows what comes next.
+- Owner-only commands (`aos sign`, `aos init`, `aos halt`, `aos resume`, `aos ceo import`, `aos repair-log`): only the owner answers, at their own terminal; never run them yourself.
+- A document for the owner uses `plugins/analucia/templates/owner-review-doc.md` and ends with `## Decisiones`: nothing he must decide is left "out of scope" without asking him. Then `aos review request <path> --order ORD-NNNN`; he decides in `aos sign`; apply "Corrections to apply" of `resume.md` and request again. Never write a `review.decision`.
 - A director file looks wrong → `run finish … --outcome needs_decision` and stop. Do not fix it.
-- STOP ≠ SUCCESS: report `blocked` honestly; a login window or account chooser is `blocked`.
+- STOP ≠ SUCCESS: `blocked` is for something that prevents the work (a login window, an account chooser). When only the owner's review is missing, the outcome is `done`.
+- One session per order or per role; commit at the end of each part. Before ending or compacting with a run open: `aos run handoff ORD-NNNN --next "…"`. A new session reads `resume.md`, the handoff on disk, takes the run (`aos run take`) and never starts another.
 
 ### Owner data and controls
 - A data file of the owner has one writer; never overwrite it without comparing first (`plugins/analucia/templates/owner-data-file.md`).
+- `owner_data` files (project.json) are the owner's: never write them. Before saying a file is versioned or not, quote `aos tracked <path>`.
 - An expected value says which rule must produce it, and its unit, not only the number.
 - A control (guard, check, test of a computation) calls the same function the product uses, never a copy.
 
@@ -44,29 +45,29 @@ CLI: `node plugins/analucia/bin/aos.mjs <command>` (written `aos <command>` belo
 `core/*.md` · `.analucia/orders/**` · `.analucia/amendments/**` · `.analucia/verify/**` · `.analucia/rollback/**` · `.analucia/asks/**` · `.analucia/director.lock` · `.analucia/HALT`
 The PreToolUse hook blocks writes and deletes there; `aos verify` refuses with `E_DIRECTOR_FILE_CHANGED` if a locked file changed.
 
-### Risk, versions, cost (orders admitted with SPEC-0003 pins)
-- `risk`: low | medium | high. high → `run start` needs `.analucia/rollback/ORD-NNNN.md` listed in director.lock (`E_NO_ROLLBACK`); `aos verify` runs every check twice. Only low may be closed by the director (`aos close --as director`); otherwise the owner closes.
-- `aos admit ORD-NNNN` (director) pins the plugin and spec versions; the order follows its pins until it closes. `run start` warns on version skew.
-- `aos cost record` / `aos cost status`: alerts at 50/80/100% inform the owner and never stop work.
-- Orders admitted without pins (ORD-0001..0007) follow SPEC-0002.
-
-### Owner sheet and asks (SPEC-0004)
-- The owner's channel is one spreadsheet: `aos ceo export` writes it; only the owner runs `aos ceo import <file>` (own TTY, types `CONFIRM`). Agents never edit it.
-- Asks are director files (`.analucia/asks/ASK-NNNN.md`), opened with `aos ask open`; only the owner resolves them, through the sheet.
-
 ### Halt
 `.analucia/HALT` exists → only reads (Read, Glob, Grep, LS). Stop and wait. Only the owner runs `aos halt --reason "…"` / `aos resume`, in their own terminal.
+The owner's STOP, ALTO, DETENER or PARA (the prompt is only that word) halts the project; on any stop: end what you do, start nothing new, say in one line what is left open.
 
 ### Where state lives
-- The only memory is `.analucia/events.jsonl`: append-only and hash-chained. Write it only through `aos` commands; never by hand. Check it with `aos verify-log`.
-- State is derived: `aos derive` → `.analucia/views/state.json` and `resume.md` (generated, gitignored, never edited). `aos history ORD-NNNN` queries one record.
-- `AGENTS.md` and `CLAUDE.md` hold rules only, never state; `CLAUDE.md` is `@AGENTS.md`. Commits and deploys are derived from git and the provider, never logged by hand.
+- The only memory is `.analucia/events.jsonl`: append-only and hash-chained. Write it only through `aos` commands, never by hand; check it with `aos verify-log`.
+- State is derived and never edited: RULES-DETAIL "Derived state".
 
 ### Commits and push
-- Every commit that changes code (any path outside `.analucia/events.jsonl`, `.analucia/evidence/**`, the director paths and `core/*.md`) ends with the trailer line `Analucia-Order: ORD-NNNN` of the order you are running. No trailer, no push (`E_NO_ORDER_TRAILER`).
-- Push only through the `pre-push` guard (`aos check-push`): the remote URL user and the credential user must equal `github_owner` in `.analucia/project.json`; no credential in the remote URL (`E_SECRET_IN_URL`); no secret pattern in added lines (`E_SECRET`, the value is never printed). Never print or type a secret.
-- `.claude/settings.json` is the project permission profile (`aos permissions write`): `git push` asks; force pushes, `git reset --hard`, `rm -rf` and reading `.env*`, `*.pem`, `*.key` are denied.
+- Every commit that changes code (any path outside the log, the evidence and the director paths) ends with the trailer line `Analucia-Order: ORD-NNNN` of the order you are running. No trailer, no push (`E_NO_ORDER_TRAILER`).
+- Push only through the `pre-push` guard (`aos check-push`). Never print or type a secret. A push to the order's branch does not ask; `main` asks; force is denied.
+
+### Detail on demand: `plugins/analucia/docs/RULES-DETAIL.md`
+Read the section when your work touches it.
+- RULES-DETAIL "Contributor": a third-party human delivers on a branch; never merges, never closes.
+- RULES-DETAIL "Orders without pins": ORD-0001 to ORD-0007.
+- RULES-DETAIL "Risk and versions": risk levels, the rollback plan, who may close, the pins of `aos admit`.
+- RULES-DETAIL "Copies of real data": record each copy, delete only what the order names, leave none before `done`.
+- RULES-DETAIL "Cost": `aos cost record`, `aos cost status`, the alerts.
+- RULES-DETAIL "Push guard and permission profile": what the guard compares, its error codes, what asks and what is denied.
+- RULES-DETAIL "Owner sheet and asks": the owner's spreadsheet; agents never edit it.
+- RULES-DETAIL "Click launchers": the owner's launchers and their commands.
 
 ### Docs for this plugin version
-Read `plugins/analucia/docs/INDEX.md` (commands, error pages, spec versions): the docs of your plugin version, not what you remember.
+Read `plugins/analucia/docs/INDEX.md`: the docs of your plugin version, not what you remember.
 <!-- analucia:end -->

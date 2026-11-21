@@ -4,16 +4,19 @@
 import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { aosCommand } from './cli.mjs';
 import { listDrafts, placeDrafts } from './drafts.mjs';
 import { installLaunchers } from './launchers.mjs';
-import { close, verify } from './lifecycle.mjs';
+import { WAIVER_MIN_REASON, close, failedGroups, sendBackForRework, verify, waiveFormChecks } from './lifecycle.mjs';
 import { appendEvent, readLog } from './log.mjs';
-import { reviewDocuments } from './review.mjs';
+import { reviewDocuments, waitingReviews } from './review.mjs';
 import { LOCALES, catalog } from './onboarding.mjs';
 import { RuleError, replay } from './state.mjs';
 import { parseFrontMatter } from './validate.mjs';
 
 const git = (root, args) => spawnSync('git', ['-C', root, ...args], { encoding: 'utf8' });
+// The owner's own pushes (the step to main and the sign-off): the push guard's second lock lets them through (ORD-0043 part 16).
+const ownerPush = (root) => spawnSync('git', ['-C', root, 'push'], { encoding: 'utf8', env: { ...process.env, AOS_OWNER_PUSH: '1' } });
 const localeOf = (root) => {
   try {
     const l = JSON.parse(readFileSync(join(root, '.analucia', 'project.json'), 'utf8')).locale;
@@ -41,7 +44,14 @@ async function placeWaitingDrafts(root, { t, ask, out, now }) {
   if (!drafts.length) return { placed: [], refused: [] };
   out(t('sign.drafts_title', { n: drafts.length }));
   for (const d of drafts) {
-    if (d.ok) out(t('sign.draft_ok', { id: d.id, title: d.title }));
+    if (d.ok) {
+      out(t('sign.draft_ok', { id: d.id, title: d.title }));
+      // ORD-0042 part 10: the business rules of the draft, with their examples, before the typed confirmation.
+      if (d.rules?.length) {
+        out(t('sign.draft_rules', { id: d.id, n: d.rules.length }));
+        for (const rule of d.rules) out(t('sign.draft_rule', { rule }));
+      }
+    }
     else {
       out(t('sign.draft_bad', { id: d.id }));
       for (const reason of d.problems) out(t('sign.draft_reason', { reason }));
@@ -82,10 +92,51 @@ export async function sign(root, { isTTY, ask, out = () => {}, now = new Date(),
   return { ...result, placed: drafts.placed, not_placed: drafts.refused, ...(merged ? { merged } : {}) };
 }
 
+// ORD-0043 part 2: the waiver, offered only here (the caller already checked that this is the owner's terminal) and
+// only when every failed check of the order is of class form. Each one is shown with its name, its command and its
+// exit code, and needs the typed word WAIVE and a written reason of at least ten characters. One check not waived:
+// nothing is waived (null).
+async function offerWaiver(root, id, { t, ask, out, results, names }) {
+  let commands = new Map();
+  try {
+    commands = new Map(JSON.parse(readFileSync(join(root, '.analucia', 'verify', `${id}.json`), 'utf8')).checks.map((c) => [c.name, c.run]));
+  } catch { /* the verify file was read by aos verify a moment ago; without it the command is not shown */ }
+  out(t('sign.waive_title', { id, n: names.length }));
+  const list = [];
+  for (const name of names) {
+    const r = results.find((c) => c.name === name && !c.passed);
+    out(t('sign.waive_check', { name, run: commands.get(name) ?? '?', exit: r.exit, expected: r.expect_exit }));
+    if ((await ask(t('sign.waive_word', { name }))).trim() !== 'WAIVE') return null;
+    const reason = (await ask(t('sign.waive_reason', { min: WAIVER_MIN_REASON }))).trim();
+    if (reason.length < WAIVER_MIN_REASON) {
+      out(t('sign.waive_short', { min: WAIVER_MIN_REASON }));
+      return null;
+    }
+    list.push({ check: name, reason });
+  }
+  return list;
+}
+
 async function signOrders(root, { t, ask, out, now, push, open }) {
   // AMD-0007 §1: documents waiting for the owner's review come first; a decision is not a close.
-  const reviewed = await reviewDocuments(root, { t, ask, out, now, ...(open ? { open } : {}) });
+  // ORD-0043 part 6: one gate per order. The reviews of one order are shown together, right before its checks; the
+  // documents of an order that is not delivered yet come first, one order at a time.
   const orders = replay(readLog(root).events).orders;
+  const waitingDocs = waitingReviews(root);
+  if (waitingDocs.length) out(t('review.waiting', { n: waitingDocs.length }));
+  const reviewed = [];
+  const reviewOf = async (id) => {
+    const made = await reviewDocuments(root, { t, ask, out, now, order: id, announce: false, ...(open ? { open } : {}) });
+    reviewed.push(...made);
+    return made;
+  };
+  for (const id of [...new Set(waitingDocs.map((d) => d.order))].sort()) if (orders[id]?.state !== 'delivered') await reviewOf(id);
+  const reworked = [];
+  // ORD-0043 part 4: a blocked order is not offered for signature; one line says what it waits for and the command
+  // that takes it out (part 3).
+  for (const id of Object.keys(orders).filter((o) => orders[o].state === 'blocked').sort()) {
+    out(t('sign.blocked', { id, by: orders[id].reason ?? orders[id].blocked_by ?? '-', cmd: `${aosCommand()} resume-order ${id} --reason "<why the block has ended>"` }));
+  }
   const delivered = Object.keys(orders).filter((id) => orders[id].state === 'delivered').sort();
   const alreadyVerified = Object.keys(orders).filter((id) => orders[id].state === 'verified').sort();
   if (!delivered.length && !alreadyVerified.length) {
@@ -94,9 +145,24 @@ async function signOrders(root, { t, ask, out, now, push, open }) {
   }
   const passed = [];
   const failed = [];
+  const waivers = new Map(); // ORD-0043 part 2: order → the checks of form the owner waived, written only after CLOSE
   for (const id of delivered) {
+    // ORD-0043 part 6: one decision of corrections (comment or reject) sends this order back for rework, with the
+    // transition delivered -> active that exists; its checks are not run and the other orders are not touched.
+    const corrections = (await reviewOf(id)).filter((d) => d.decision !== 'approve');
+    if (corrections.length) {
+      try {
+        sendBackForRework(root, id, { documents: corrections.length, isTTY: true, now });
+        out(t('sign.rework', { id, n: corrections.length }));
+        reworked.push(id);
+      } catch (x) {
+        if (!x.code) throw x;
+        out(t('sign.rework_held', { id, n: corrections.length, why: x.code }));
+      }
+      continue;
+    }
     out(t('sign.checking', { id, title: titleOf(root, id) }));
-    const onCheck = (c) => out(c.passed ? t('sign.check_pass', { name: c.name }) : t('sign.check_fail', { name: c.name, exit: c.exit, expected: c.expect_exit }));
+    const onCheck = (c) => out(c.passed ? t(c.passed_on_second_run ? 'sign.check_pass_second' : 'sign.check_pass', { name: c.name }) : t('sign.check_fail', { name: c.name, exit: c.exit, expected: c.expect_exit }));
     try {
       const r = verify(root, id, { onCheck });
       out(t('sign.evidence', { path: r.evidence }));
@@ -105,7 +171,19 @@ async function signOrders(root, { t, ask, out, now, push, open }) {
     } catch (x) {
       if (!x.code) throw x;
       if (x.evidence) out(t('sign.evidence', { path: x.evidence }));
-      const why = x.code === 'E_VERIFY_FAILED' ? (x.results ?? []).filter((c) => !c.passed).map((c) => c.name).join(', ') : x.code;
+      // ORD-0043 part 2: every failed check is of class form → the owner may waive each one with a written reason.
+      const groups = x.code === 'E_VERIFY_FAILED' ? failedGroups(x.results ?? []) : null;
+      if (groups && groups.form.length && !groups.substance.length) {
+        const waived = await offerWaiver(root, id, { t, ask, out, results: x.results, names: groups.form });
+        if (waived) {
+          waivers.set(id, waived);
+          out(t('sign.waived', { id, n: waived.length }));
+          passed.push(id);
+          continue;
+        }
+        out(t('sign.waive_none', { id }));
+      }
+      const why = !groups ? x.code : groups.form.length ? `substance: ${groups.substance.join(', ') || '-'}; form: ${groups.form.join(', ')}` : groups.substance.join(', ');
       out(t('sign.failed', { id, why }));
       failed.push(id);
     }
@@ -118,7 +196,7 @@ async function signOrders(root, { t, ask, out, now, push, open }) {
     passed.push(id);
   }
   if (!passed.length) {
-    out(t('sign.nothing_passed'));
+    if (failed.length || !reworked.length) out(t('sign.nothing_passed'));
     return reviewed.length ? commitSignOff(root, { t, out, push, closed: [], failed, reviewed }) : { signed: [], failed, reviewed };
   }
   const answer = await ask(t('sign.confirm', { ids: passed.join(', ') }));
@@ -128,8 +206,12 @@ async function signOrders(root, { t, ask, out, now, push, open }) {
     throw new RuleError('E_NOT_CONFIRMED', t('sign.not_confirmed'));
   }
   // The owner typed CLOSE at a terminal: the same owner-only close as "aos close", without asking twice.
+  // ORD-0043 part 2: the waivers are written now, after the owner's CLOSE: into the verify evidence (WAIVED) and
+  // then into the payload of the sign-off event; the order goes on as one whose checks all passed.
+  const waived = [];
+  for (const [id, list] of waivers) waived.push(...waiveFormChecks(root, id, { waivers: list, isTTY: true, now }));
   await close(root, passed, { isTTY: true, ask: async () => 'CLOSE', now });
-  appendEvent(root, { type: 'owner.signed', actor: 'owner', subject: null, payload: { orders: passed, failed } }, { now });
+  appendEvent(root, { type: 'owner.signed', actor: 'owner', subject: null, payload: { orders: passed, failed, ...(waived.length ? { waived } : {}) } }, { now });
   out(t('sign.closed', { ids: passed.join(', ') }));
   return commitSignOff(root, { t, out, push, closed: passed, failed, reviewed });
 }
@@ -173,7 +255,7 @@ async function offerStepToDefault(root, { t, ask, out }) {
     git(root, ['switch', '-q', branch]); // back where the owner was; the default branch did not move
     return failed('git merge --ff-only', ff);
   }
-  const p = git(root, ['push']);
+  const p = ownerPush(root);
   if (p.status !== 0) {
     out(t('sign.merge_unpushed', { into, why: whyRefused(p) }));
     return result;
@@ -204,7 +286,7 @@ function commitSignOff(root, { t, out, push, closed, failed, reviewed }) {
   out(t('sign.committed', { commit }));
   Object.assign(result, { committed: true, commit });
   if (!push) return result;
-  const p = git(root, ['push']);
+  const p = ownerPush(root);
   if (p.status !== 0) {
     out(t('sign.push_refused', { why: whyRefused(p) }));
     return result;

@@ -40,7 +40,7 @@ test('the name: EJECUTOR <project code or folder name>, DIRECTOR for a session t
   assert.equal(r.status, 0, r.stderr);
   const declared = readLog(coded).events.at(-1);
   assert.deepEqual([declared.type, declared.actor, declared.agent.session], ['role.declared', 'director', 's1']);
-  assert.equal(sessionName(coded, 's1'), 'DIRECTOR');
+  assert.equal(sessionName(coded, 's1'), 'DIRECTOR SHOP'); // ORD-0043 part 10: the name carries the project
   assert.equal(sessionName(coded, 's2'), 'EJECUTOR SHOP', 'another session keeps its own role');
   assert.equal(sessionName(coded, null), 'EJECUTOR SHOP');
   assert.ok(isOwnName(coded, 'DIRECTOR') && isOwnName(coded, 'EJECUTOR SHOP'));
@@ -72,7 +72,7 @@ test('the hook: at session start it sets the title; at a later prompt it renames
   // The session declares director; at the next prompt it is renamed.
   assert.equal(aos(root, ['role', 'declare', 'director', '--scope', '.analucia/drafts/**'], { ...baseEnv, CLAUDE_CODE_SESSION_ID: 's1' }).status, 0);
   const later = hook(root, { hook_event_name: 'UserPromptSubmit', session_id: 's1', session_title: 'EJECUTOR SHOP', prompt: 'x' });
-  assert.deepEqual(title(later), { hookEventName: 'UserPromptSubmit', sessionTitle: 'DIRECTOR' });
+  assert.deepEqual(title(later), { hookEventName: 'UserPromptSubmit', sessionTitle: 'DIRECTOR SHOP' });
   // A session the owner named by hand keeps its name, at start (a resume) and at a prompt.
   for (const input of [{ hook_event_name: 'SessionStart', source: 'resume' }, { hook_event_name: 'UserPromptSubmit', prompt: 'x' }]) {
     assert.equal(hook(root, { ...input, session_id: 's9', session_title: 'Revisión de precios' }).stdout, '');
@@ -91,7 +91,8 @@ test('the plugin registers the hook on SessionStart and UserPromptSubmit, next t
   const commands = (event) => hooks[event].flatMap((h) => h.hooks.map((x) => x.command));
   assert.ok(commands('SessionStart').some((c) => c.endsWith('hook session-start')), 'the resume hook stays');
   assert.ok(commands('SessionStart').some((c) => c.endsWith('hook session-name')));
-  assert.ok(commands('UserPromptSubmit').some((c) => c.endsWith('hook session-name')));
+  // ORD-0042 part 8: on a prompt the same naming runs inside the prompt hook, which also warns about a prompt of another project.
+  assert.ok(commands('UserPromptSubmit').some((c) => c.endsWith('hook user-prompt')));
   for (const event of ['SessionEnd', 'Stop', 'PreCompact', 'PreToolUse']) assert.ok(hooks[event], event);
 });
 

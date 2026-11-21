@@ -310,14 +310,15 @@ test('the wizard asks the code after its 15 questions; in a project already init
   useScratchConfig();
   const fresh = mkdtempSync(join(tmpdir(), 'aos-code-wiz-'));
   const numbers = WIZARD.map((q) => (q.key === 'github_owner' ? '2' : '1'));
-  const first = owner([...numbers, '', 'ord', 'WIZ']);
+  const first = owner([...numbers, '', 'ord', 'WIZ', '']); // ORD-0043 part 14: the owner data is asked after the code
   const a = await wizard(fresh, { locale: 'en', ask: first.ask, out: first.out });
   assert.equal(a.provided.project_code, 'WIZ');
-  assert.equal(first.prompts.length, 15 + 1 + 2, 'the 15 questions, the summary, the code asked twice (a type word first)');
-  assert.match(first.prompts.at(-1), /2 to 5 capital letters/);
+  assert.equal(first.prompts.length, 15 + 1 + 2 + 1, 'the 15 questions, the summary, the code asked twice (a type word first), the owner data');
+  assert.match(first.prompts.at(-2), /2 to 5 capital letters/);
+  assert.match(first.prompts.at(-1), /only yours to write/);
   assert.match(first.lines.join('\n'), /type word/);
   // Enter: no code for now, said in one line.
-  const skip = owner([...numbers, '', '']);
+  const skip = owner([...numbers, '', '', '']);
   const b = await wizard(mkdtempSync(join(tmpdir(), 'aos-code-wiz-')), { locale: 'en', ask: skip.ask, out: skip.out });
   assert.equal('project_code' in b.provided, false);
   // Already initialised, no code: only the code is asked.

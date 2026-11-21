@@ -57,12 +57,12 @@ test('done without the section: a warning, never a refusal; the outcome is recor
 });
 
 test('done with the section, or any other outcome: no warning', () => {
-  const withSection = activeOrder('# report\n\n## Evidencia\n\n1. 3 of 3 checks.\n\nOUTCOME: done\n');
+  const withSection = activeOrder('# report\n\n## Evidencia\n\n1. 3 of 3 checks.\n\nWork: complete\nOUTCOME: done\n');
   const a = finish(withSection, 'done');
   assert.equal(a.status, 0);
   assert.doesNotMatch(a.stdout, /warning/);
   assert.equal(order(withSection).state, 'delivered');
-  const blocked = activeOrder('# report\n\nStopped.\n\nOUTCOME: blocked\n');
+  const blocked = activeOrder('# report\n\nStopped.\n\nWork: not complete\nOUTCOME: blocked\n');
   const b = aos(blocked, ['run', 'finish', 'ORD-0001', '--outcome', 'blocked', '--evidence', '.analucia/evidence/ORD-0001/report.md', '--reason', 'waiting']);
   assert.equal(b.status, 0);
   assert.doesNotMatch(b.stdout, /warning/);

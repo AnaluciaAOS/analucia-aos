@@ -126,7 +126,7 @@ test('an open run, then a blocked order, then drafts to fix, then a queued order
   assert.equal(oneLine(next(root), 'open run'), `Next (executor): run 1 of ORD-0001 is open. Finish the work, then record its outcome with: ${CMD} run finish ORD-0001 --outcome <outcome> --evidence .analucia/evidence/ORD-0001/report.md`);
   // blocked (before the queued ORD-0002).
   finish(root, 'ORD-0001', 'needs_decision', ['--reason', 'the spec and the order disagree']);
-  assert.equal(oneLine(next(root), 'blocked'), 'Next (director): ORD-0001 is blocked (the spec and the order disagree). Decide how it continues: the answer it waits for, or a new draft order.');
+  assert.equal(oneLine(next(root), 'blocked'), `Next (director): ORD-0001 is blocked (the spec and the order disagree). Decide how it continues: the answer it waits for, or a new draft order. When what it waits for is done, the executor takes it out with: node "${AOS_BIN}" resume-order ORD-0001 --reason "<why the block has ended>"`); // ORD-0043 part 3: the exact line
   // a draft that cannot be placed is the director's to fix, after the blocked order is dealt with.
   const other = project(['ORD-0001']);
   draft(other, 'ORD-0002', { verify: false });

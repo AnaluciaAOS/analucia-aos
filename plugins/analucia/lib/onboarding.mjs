@@ -51,6 +51,8 @@ export const QUESTIONS = [
   { key: 'owner_locale', moment: 2, type: 'enum', values: LOCALES, def: (ctx) => ctx.locale },
   // ORD-0041 part 1 (AMD-0015 §8): the project code, 2 to 5 capital letters. Empty = no code yet (as before).
   { key: 'project_code', moment: 2, type: 'code', optional: true, def: () => '' },
+  // ORD-0043 part 14: the files only the owner writes (path patterns); empty by default. An agent never writes them.
+  { key: 'owner_data', moment: 2, type: 'list', optional: true, def: () => [] },
   // AMD-0006: where the project will be hosted, before the first order; later is always valid.
   { key: 'hosting', moment: 3, type: 'hosting', def: () => 'later' },
   { key: 'deploy_target', moment: 3, type: 'text', def: () => 'none' },
@@ -149,7 +151,7 @@ export function resolveAnswers(root, given, { locale, now = new Date() }) {
       value = q.def(ctx);
       if (value === undefined) throw new RuleError('E_MISSING_FIELD', `${q.key} is required: it has no safe default`);
       source = 'default';
-      notices.push({ key: q.key === 'budget_monthly_usd' ? 'notice.budget_unknown' : q.key === 'project_code' ? 'notice.no_code' : 'notice.default', vars: { value: show(value) }, of: q.key });
+      if (q.key !== 'owner_data') notices.push({ key: q.key === 'budget_monthly_usd' ? 'notice.budget_unknown' : q.key === 'project_code' ? 'notice.no_code' : 'notice.default', vars: { value: show(value) }, of: q.key });
     }
     const same = prev && JSON.stringify(prev.value) === JSON.stringify(value) && (prev.source === 'default') === (source === 'default');
     answers[q.key] = { value, source: source === 'kept' ? (prev.source ?? 'owner') : source, at: same ? prev.at : at };
@@ -176,6 +178,8 @@ function projectJsonPlan(root, answers) {
   const next = { ...current, wip_limit: answers.wip_limit.value, github_owner: answers.github_owner.value, locale: answers.owner_locale.value };
   // ORD-0041 part 1: the code is written once; an empty answer never removes a code the project has.
   if (answers.project_code?.value) next.project_code = answers.project_code.value;
+  // ORD-0043 part 14: the owner data; an empty answer never removes the list the project has.
+  if (answers.owner_data?.value?.length) next.owner_data = answers.owner_data.value;
   // ORD-0012: record the owner's time zone once, so every later timestamp uses it, whatever machine writes it.
   if (!next.timezone) next.timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const hosting = parseHosting(answers.hosting.value);

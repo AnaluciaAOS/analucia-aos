@@ -65,7 +65,7 @@ test('closing path: empty folder → launchers → init → first draft → plac
   assert.ok(next(dir).includes(launcherFile('INICIAR')));
   assert.match(agent(dir, ['init']).stderr, /E_OWNER_TTY/);
   const numbers = WIZARD.map((q) => (q.key === 'github_owner' ? '2' : '1')); // no GitHub account: this folder has no remote
-  const w = window([...numbers, '', 'DEMO', 'CONFIRM']); // the 15 answers, the summary, the project code, then CONFIRM
+  const w = window([...numbers, '', 'DEMO', '', 'CONFIRM']); // the 15 answers, the summary, the project code, the owner data (none), then CONFIRM
   const startedAt = new Date();
   const { provided } = await wizard(dir, { locale: 'en', ask: w.ask, out: w.out });
   const init = await runInit(dir, { provided, locale: 'en', isTTY: true, ask: w.ask, out: w.out, wizard: true, onConfirmed: () => onboardingStarted(dir, { startedAt }) });
@@ -80,7 +80,7 @@ test('closing path: empty folder → launchers → init → first draft → plac
   assert.match(next(dir), /^Nothing is pending\./);
   assert.match(agent(dir, ['drafts']).stdout, /Next free ID: DEMO-0001/);
   mkdirSync(join(dir, '.analucia', 'drafts'), { recursive: true });
-  writeFileSync(join(dir, '.analucia', 'drafts', 'DEMO-0001.md'), ['---', 'id: DEMO-0001', 'title: Write the first page', 'kind: build', 'created: 2026-11-14', 'budget_max_minutes: 30', 'budget_max_attempts: 2', 'risk: low', 'cost_effect: none', '---', '', '# DEMO-0001', '', 'Write `hello.txt` with one line.', '', '## Acceptance criteria', '', '- [ ] `hello.txt` exists and is not empty.', ''].join('\n'));
+  writeFileSync(join(dir, '.analucia', 'drafts', 'DEMO-0001.md'), ['---', 'id: DEMO-0001', 'title: Write the first page', 'kind: build', 'replaces: []', 'created: 2026-11-14', 'budget_max_minutes: 30', 'budget_max_attempts: 2', 'risk: low', 'cost_effect: none', '---', '', '# DEMO-0001', '', 'Write `hello.txt` with one line.', '', '## Business rules', '', '- none', '', '## Acceptance criteria', '', '- [ ] `hello.txt` exists and is not empty.', ''].join('\n'));
   writeFileSync(join(dir, '.analucia', 'drafts', 'DEMO-0001.json'), `${JSON.stringify({ order: 'DEMO-0001', checks: [{ name: 'the page exists', run: 'test -s hello.txt', expect_exit: 0 }, { name: 'the report ends with an outcome', run: "tail -1 .analucia/evidence/DEMO-0001/report.md | grep -q '^OUTCOME: '", expect_exit: 0 }] }, null, 2)}\n`);
   const checked = agent(dir, ['drafts']);
   assert.equal(checked.status, 0, checked.stdout);
@@ -106,7 +106,7 @@ test('closing path: empty folder → launchers → init → first draft → plac
   assert.match(next(dir), /^Next \(executor\): run 1 of DEMO-0001 is open\./);
   writeFileSync(join(dir, 'hello.txt'), 'hello\n');
   mkdirSync(join(dir, '.analucia', 'evidence', 'DEMO-0001'), { recursive: true });
-  writeFileSync(join(dir, '.analucia', 'evidence', 'DEMO-0001', 'report.md'), '# DEMO-0001 — report of run 1\n\n## Para el dueño\n\nLa página existe.\n\n## Evidencia\n\n1. 1 de 1 archivo escrito.\n2. Sin muestra: se revisó el único archivo.\n3. Decisión: firmar; se puede revertir borrando el archivo.\n\nOUTCOME: done\n');
+  writeFileSync(join(dir, '.analucia', 'evidence', 'DEMO-0001', 'report.md'), '# DEMO-0001 — report of run 1\n\n## Para el dueño\n\nLa página existe.\n\n## Evidencia\n\n1. 1 de 1 archivo escrito.\n2. Sin muestra: se revisó el único archivo.\n3. Decisión: firmar; se puede revertir borrando el archivo.\n\nWork: complete\nOUTCOME: done\n');
   const finished = agent(dir, ['run', 'finish', 'DEMO-0001', '--outcome', 'done', '--evidence', '.analucia/evidence/DEMO-0001/report.md']);
   assert.equal(finished.status, 0, finished.stderr);
   assert.doesNotMatch(finished.stdout, /warning/);

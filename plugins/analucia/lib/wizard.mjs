@@ -78,14 +78,31 @@ async function askCode(root, { t, ask, out }) {
   }
 }
 
+// ORD-0043 part 14: the files only the owner writes, typed as path patterns separated by commas. Enter: none.
+async function askOwnerData({ t, ask }) {
+  const raw = (await ask(`\n${t('w.owner_data')}\n> `)).trim();
+  const list = raw.split(',').map((s) => s.trim()).filter(Boolean);
+  return list.length ? list : null;
+}
+
 export async function wizard(root, { locale: startLocale = 'en', ask, out }) {
   const previous = readOnboarding(root).answers ?? {};
   const hasCode = Boolean(projectCode(root) || previous.project_code?.value);
-  // A project that is already initialised and has no code is asked only that.
-  if (Object.keys(previous).length && !hasCode) {
+  const hasOwnerData = 'owner_data' in previous;
+  // A project that is already initialised and lacks the code, or the owner data, is asked only what it lacks.
+  if (Object.keys(previous).length && !(hasCode && hasOwnerData)) {
     const lang = LOCALES.includes(previous.owner_locale?.value) ? previous.owner_locale.value : startLocale;
-    const code = await askCode(root, { t: catalog(lang), ask, out });
-    return { provided: code ? { project_code: code } : {}, locale: lang };
+    const t0 = catalog(lang);
+    const provided = {};
+    if (!hasCode) {
+      const code = await askCode(root, { t: t0, ask, out });
+      if (code) provided.project_code = code;
+    }
+    if (!hasOwnerData) {
+      const list = await askOwnerData({ t: t0, ask });
+      if (list) provided.owner_data = list;
+    }
+    return { provided, locale: lang };
   }
   const ctx = { detected: remoteOwner(root) ?? (previous.github_owner?.value && previous.github_owner.value !== 'none' ? previous.github_owner.value : null) };
   const chosen = new Map(); // index -> stored value
@@ -143,6 +160,10 @@ export async function wizard(root, { locale: startLocale = 'en', ask, out }) {
   if (!hasCode) {
     const code = await askCode(root, { t, ask, out });
     if (code) provided.project_code = code;
+  }
+  if (!hasOwnerData) {
+    const list = await askOwnerData({ t, ask });
+    if (list) provided.owner_data = list;
   }
   return { provided, locale };
 }

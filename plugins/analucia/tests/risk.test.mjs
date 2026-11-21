@@ -138,7 +138,7 @@ test('medium: --as director is refused; the owner closes from a TTY', async () =
   assert.equal(stateOf(root, 'ORD-0001').state, 'closed');
 });
 
-test('high: run start needs a locked rollback plan (E_NO_ROLLBACK); verify takes two samples; only the owner closes', async () => {
+test('high: run start needs a locked rollback plan (E_NO_ROLLBACK); verify runs each check once (ORD-0043 part 17); only the owner closes', async () => {
   const missing = riskProject([{ id: 'ORD-0001', risk: 'high', rollback: 'missing' }]);
   assert.equal(aos(missing, ['admit', 'ORD-0001']).status, 0);
   let before = log(missing);
@@ -159,31 +159,27 @@ test('high: run start needs a locked rollback plan (E_NO_ROLLBACK); verify takes
   const v = aos(root, ['verify', 'ORD-0001']);
   assert.equal(v.status, 0, v.stderr);
   const ev = readLog(root).events.find((e) => e.payload.level === 'verified');
-  assert.equal(ev.payload.samples, 2);
-  assert.deepEqual(ev.payload.checks.map((c) => c.sample), [1, 2]);
-  assert.match(readFileSync(join(root, ev.payload.path), 'utf8'), /samples: 2[\s\S]*sample 2, check 1/);
+  assert.equal(ev.payload.samples, 1);
+  assert.deepEqual(ev.payload.repeated, []);
+  assert.match(readFileSync(join(root, ev.payload.path), 'utf8'), /samples: 1/);
   refused(aos(root, ['close', 'ORD-0001', '--as', 'director']), 'E_RISK_CLOSE');
   await close(root, ['ORD-0001'], { isTTY: true, ask: async () => 'CLOSE' });
   assert.equal(stateOf(root, 'ORD-0001').state, 'closed');
 });
 
-test('high: verify fails when the second sample fails (a check that passes once, then fails)', () => {
-  const flaky = 'if [ -f .sample-seen ]; then echo second; exit 1; fi; touch .sample-seen; echo first';
+test('high: a check that fails is run again once; a flaky check passes marked, the second result counts (ORD-0043 part 17)', () => {
+  const flaky = 'if [ -f .sample-seen ]; then echo second; exit 0; fi; touch .sample-seen; echo first; exit 1';
   const root = riskProject([{ id: 'ORD-0001', risk: 'high', rollback: 'locked' }], { checks: [{ name: 'flaky', run: flaky, expect_exit: 0 }] });
   assert.equal(aos(root, ['admit', 'ORD-0001']).status, 0);
   deliver(root, 'ORD-0001');
   const v = aos(root, ['verify', 'ORD-0001']);
-  refused(v, 'E_VERIFY_FAILED');
+  assert.equal(v.status, 0, v.stderr);
   const ev = readLog(root).events.filter((e) => e.payload.level === 'verified').at(-1);
-  assert.deepEqual(ev.payload.checks.map((c) => [c.sample, c.passed]), [[1, true], [2, false]]);
-  assert.equal(ev.payload.samples, 2);
-  assert.equal(stateOf(root, 'ORD-0001').state, 'delivered');
-  // The same flaky check passes a single-sample (medium) verify: the second sample is what catches it.
-  const medium = riskProject([{ id: 'ORD-0001', risk: 'medium' }], { checks: [{ name: 'flaky', run: flaky, expect_exit: 0 }] });
-  assert.equal(aos(medium, ['admit', 'ORD-0001']).status, 0);
-  deliver(medium, 'ORD-0001');
-  assert.equal(aos(medium, ['verify', 'ORD-0001']).status, 0);
-  rmSync(join(medium, '.sample-seen'), { force: true });
+  assert.equal(ev.payload.samples, 1);
+  assert.deepEqual(ev.payload.repeated, ['flaky']);
+  assert.deepEqual(ev.payload.checks.map((c) => [c.passed, c.passed_on_second_run]), [[true, true]]);
+  assert.equal(stateOf(root, 'ORD-0001').state, 'verified');
+  rmSync(join(root, '.sample-seen'), { force: true });
 });
 
 test('version skew: run start still runs, records version_skew and prints one warning', () => {
