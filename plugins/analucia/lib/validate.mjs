@@ -1,11 +1,12 @@
 // Validator for SPEC-0001 records: order definitions, project.json and the event log.
 // Every error is { line, code, message }. Codes are stable; see core/ORDER_FORMAT.md.
+import { specVersionProblems } from './spec-version.mjs';
 import { createHash } from 'node:crypto';
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { basename, join, relative, sep } from 'node:path';
 import { prefixProblem } from './ids.mjs';
 import { enums, ASK_ID_RE, ISO_TS_RE, ORDER_ID_RE, RECORD_ID_RE, SHA256_RE, TYPE_WORDS, ULID_RE } from './enums.mjs';
-import { movingRefSeverity, projectRoot, readBranches, scanMovingRefs } from './verify-refs.mjs';
+import { grepAsciiSeverity, movingRefSeverity, projectRoot, readBranches, scanMovingRefs } from './verify-refs.mjs';
 
 export const sha256Hex = (bytes) => createHash('sha256').update(bytes).digest('hex');
 
@@ -29,6 +30,11 @@ export const ORDER_KEYS = [
   'continues', // AMD-0015 §2: free text naming the earlier record of the project the order continues
   'replaces', // ORD-0042 part 7: inline list of paths of the project the work of the order replaces
   'decision', // ORD-0042 part 6: one line of free text, the owner's decision the order carries out
+  'promises', // ORD-0047 part 1: inline list of what the owner will see on the published site
+  'screens', // ORD-0047 part 2: inline list of "<address>|<button>|<button>" of the screens the order adds or changes
+  'touches_db', // ORD-0047 part 5: true when the order runs a script that touches a database
+  'base', // ORD-0047 part 7: the commit the draft was written on
+  'assumes', // ORD-0047 part 7: inline list of the files, commands and services the order takes as existing
 ];
 export const WORKFLOWS = ['qrspi'];
 const REVIEW_DECISIONS = ['approve', 'comment', 'reject']; // AMD-0007 §1
@@ -127,6 +133,15 @@ export function validateOrderText(text, fileName, { pinned = false } = {}) {
   if (replaces && !(Array.isArray(replaces.value) && replaces.value.every((p) => typeof p === 'string' && p.trim() !== '' && !/^([A-Za-z]:|[\\/])/.test(p) && !p.includes('\\') && !p.split('/').includes('..')))) {
     errors.push(err(replaces.line, 'E_FIELD_TYPE', '"replaces" must be an inline list of paths of the project, relative, with "/" and no ".." ("replaces: []" when the order replaces nothing)'));
   }
+  // ORD-0047: promises, screens and assumes are inline lists of text; touches_db is true or false; base is a commit SHA.
+  for (const k of ['promises', 'screens', 'assumes']) {
+    const f = get(k);
+    if (f && !(Array.isArray(f.value) && f.value.length > 0 && f.value.every(isNonEmptyString))) errors.push(err(f.line, 'E_FIELD_TYPE', `"${k}" must be a non-empty inline list of text [a, b] (leave the key out when there is none)`));
+  }
+  const touchesDb = get('touches_db');
+  if (touchesDb && !['true', 'false'].includes(touchesDb.value)) errors.push(err(touchesDb.line, 'E_FIELD_TYPE', '"touches_db" must be true or false'));
+  const baseKey = get('base');
+  if (baseKey && !(typeof baseKey.value === 'string' && /^[0-9a-f]{7,40}$/.test(baseKey.value))) errors.push(err(baseKey.line, 'E_FIELD_TYPE', '"base" must be a commit SHA (7 to 40 hex characters)'));
   const decision = get('decision');
   if (decision && (Array.isArray(decision.value) || !isNonEmptyString(decision.value))) errors.push(err(decision.line, 'E_FIELD_TYPE', '"decision" must be one line of text: the decision of the owner this order carries out'));
   const continues = get('continues');
@@ -261,7 +276,7 @@ export const askBody = (text) => {
 
 // ---------- project.json ----------
 
-const PROJECT_KEYS = ['project_code', 'push_accounts', 'wip_limit', 'budget', 'reversible', 'deploy', 'protected_branches', 'ownership_boundaries', 'locale', 'github_owner', 'budget_monthly_usd', 'budget_currency', 'timezone', 'hosting', 'hosting_where', 'owner_data'];
+const PROJECT_KEYS = ['project_code', 'push_accounts', 'wip_limit', 'budget', 'reversible', 'deploy', 'protected_branches', 'ownership_boundaries', 'locale', 'github_owner', 'budget_monthly_usd', 'budget_currency', 'timezone', 'hosting', 'hosting_where', 'owner_data', 'release_denylist', 'tests'];
 const HOSTING_CHOICES = ['managed', 'own-server', 'already', 'later']; // AMD-0006
 
 function lineOfKey(text, key) {
@@ -313,7 +328,19 @@ export function validateProjectText(text) {
   if ('ownership_boundaries' in p && !isObject(p.ownership_boundaries)) errors.push(err(at('ownership_boundaries'), 'E_FIELD_TYPE', '"ownership_boundaries" must be an object'));
   if ('locale' in p && !isNonEmptyString(p.locale)) errors.push(err(at('locale'), 'E_FIELD_TYPE', '"locale" must be a non-empty string'));
   if ('github_owner' in p && !isNonEmptyString(p.github_owner)) errors.push(err(at('github_owner'), 'E_FIELD_TYPE', '"github_owner" must be a non-empty string'));
-  if ('budget_monthly_usd' in p && !(typeof p.budget_monthly_usd === 'number' && Number.isFinite(p.budget_monthly_usd) && p.budget_monthly_usd >= 0)) {
+  // ORD-0047 part 3: the command that runs the tests of the project and the format of what it writes: "tap" (on its
+  // standard output) or "junit:<path>" (an XML file the command writes).
+  if ('tests' in p) {
+    const t = p.tests;
+    if (!isObject(t)) errors.push(err(at('tests'), 'E_FIELD_TYPE', '"tests" must be an object { "command", "report" }'));
+    else {
+      for (const k of Object.keys(t)) if (!['command', 'report'].includes(k)) errors.push(err(at('tests'), 'E_UNKNOWN_KEY', `key "tests.${k}" is not allowed`));
+      if (!isNonEmptyString(t.command)) errors.push(err(at('tests'), 'E_FIELD_TYPE', '"tests.command" must be a non-empty string: the command that runs the tests'));
+      if (!(typeof t.report === 'string' && /^(tap|junit:.+)$/.test(t.report))) errors.push(err(at('tests'), 'E_FIELD_TYPE', '"tests.report" must be "tap" (the command writes TAP on its standard output) or "junit:<path>" (the XML file it writes)'));
+    }
+  }
+  if ('release_denylist' in p && !isNonEmptyString(p.release_denylist)) errors.push(err(at('release_denylist'), 'E_FIELD_TYPE', '"release_denylist" must be a non-empty string (the path of the list of forbidden names)'));
+  if ('budget_monthly_usd' in p &&!(typeof p.budget_monthly_usd === 'number' && Number.isFinite(p.budget_monthly_usd) && p.budget_monthly_usd >= 0)) {
     errors.push(err(at('budget_monthly_usd'), 'E_FIELD_TYPE', '"budget_monthly_usd" must be a number >= 0'));
   }
   // ORD-0012: the IANA time zone every timestamp is written in (for example America/Lima).
@@ -351,7 +378,13 @@ export const substanceByNature = (run) => SUBSTANCE_COMMANDS.find(([re]) => re.t
 
 // `movingRefs` ({ severity: 'error' | 'warning', branches }) turns on the ORD-0034 rule: a check may not end a
 // git range at a moving ref. Findings carry `severity`; a warning never changes the exit code.
-export function validateVerifyText(text, fileName, { movingRefs = null } = {}) {
+// ORD-0047 part 4 (OBS-206): a check that runs grep with a pattern that has a non-ASCII character. Git Bash gives false
+// alarms on accents; `aos text has|lacks` is the check.
+export const GREP_NON_ASCII_RE = /(?:^|[\s|;&(])e?grep\b[^\n]*[^\x00-\x7f]/;
+// Whether the log says the order is closed: its verify file is history and newer rules do not judge it.
+export const closedIn = (events, id) => events.some((e) => e?.subject === id && e.type === 'order.state_changed' && e.payload?.to === 'closed');
+// `grepAscii`: false (not judged), 'error' or 'warning' (the severity of the finding; true means 'error').
+export function validateVerifyText(text, fileName, { movingRefs = null, grepAscii = false } = {}) {
   const { value: v, error } = parseJson(text);
   if (error) return [error];
   if (!isObject(v)) return [err(1, 'E_FIELD_TYPE', 'a verify file must be a JSON object')];
@@ -414,6 +447,9 @@ export function validateVerifyText(text, fileName, { movingRefs = null } = {}) {
     for (const k of ['name', 'run']) if (k in c && !isNonEmptyString(c[k])) errors.push(err(at(k), 'E_FIELD_TYPE', `${where}: "${k}" must be a non-empty string`));
     if ('expect_exit' in c && !(Number.isInteger(c.expect_exit) && c.expect_exit >= 0 && c.expect_exit <= 255)) {
       errors.push(err(at('expect_exit'), 'E_FIELD_TYPE', `${where}: "expect_exit" must be an integer 0-255`));
+    }
+    if (grepAscii && isNonEmptyString(c.run) && GREP_NON_ASCII_RE.test(c.run)) {
+      errors.push({ ...err(at('checks'), 'E_GREP_NON_ASCII', `${where} (check ${i + 1}, "${c.name}"): grep over text with a non-ASCII character gives false alarms in Git Bash. Use: aos text has <file> "<text>" (or aos text lacks)`), ...(grepAscii === 'warning' ? { severity: 'warning' } : {}) });
     }
     if (movingRefs && isNonEmptyString(c.run)) {
       const found = scanMovingRefs(c.run, { branches: movingRefs.branches });
@@ -698,12 +734,16 @@ export function validateFile(path, display = path, { pinned = new Set(), events,
   const refsFor = () => {
     const root = events && branches ? null : projectRoot(process.cwd());
     const order = basename(name, '.json');
-    return { severity: movingRefSeverity(events ?? readEvents(root), order), branches: branches ?? readBranches(root ?? process.cwd()) };
+    const log = events ?? readEvents(root);
+    return { severity: movingRefSeverity(log, order), branches: branches ?? readBranches(root ?? process.cwd()), grep: grepAsciiSeverity(log, order) };
   };
   if (name === 'events.jsonl') errors = validateEventsBuffer(readFileSync(path));
   else if (name === 'project.json') errors = validateProjectText(readFileSync(path, 'utf8'));
   else if (name === 'director.lock') errors = validateLockText(readFileSync(path, 'utf8'));
-  else if (/^[A-Z]{2,5}-.*\.json$/.test(name)) errors = validateVerifyText(readFileSync(path, 'utf8'), name, { movingRefs: refsFor() });
+  else if (/^[A-Z]{2,5}-.*\.json$/.test(name)) {
+    const refs = refsFor();
+    errors = validateVerifyText(readFileSync(path, 'utf8'), name, { movingRefs: refs, grepAscii: refs.grep ?? false });
+  }
   else if (/^(?:[A-Z]{2,5}-)?ASK-.*\.md$/.test(name)) errors = validateAskText(readFileSync(path, 'utf8'), name);
   else if (name.endsWith('.md')) errors = validateOrderText(readFileSync(path, 'utf8'), name, { pinned: pinned.has(basename(name, '.md')) });
   else errors = [err(1, 'E_FILE_TYPE', 'not an order (ORD-*.md), ask (ASK-*.md), verify file (ORD-*.json), director.lock, project.json or events.jsonl')];
@@ -748,6 +788,8 @@ export function validateTree(root) {
     if (existsSync(p) && statSync(p).isFile()) out.push(...validateFile(p, rel(p)));
     else out.push({ file: toPosix(rel(p)), ...err(1, 'E_FILE_MISSING', `${f} is missing`) });
   }
+  // ORD-0047 part 14 (OBS-187): a core spec that changed has a new version.
+  for (const p of specVersionProblems(root)) out.push({ file: p.file, ...err(1, p.code, p.text) });
   return out;
 }
 

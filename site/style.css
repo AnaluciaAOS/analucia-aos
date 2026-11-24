@@ -217,6 +217,23 @@ footer .wrap { border-top: 1px solid var(--line); padding-top: 14px; display: fl
 .flow [data-step] { cursor: pointer; }
 .flow [data-step].is-on .n { stroke-width: 3.5; }
 .is-dim { opacity: .28; }
+.loopd { display: block; width: 100%; min-width: 640px; height: auto; }
+.loopd text { text-anchor: middle; dominant-baseline: central; }
+.loopd .h { font: 600 14px var(--sans); fill: #17202a; }
+.loopd .s { font: 12px var(--sans); fill: #3c454e; }
+.loopd .tt { fill: #8a3417; }
+.loopd .b { stroke-width: 1; }
+.loopd .rules { fill: #f1efe8; stroke: #5f5e5a; }
+.loopd .step { fill: #eeedfe; stroke: #534ab7; }
+.loopd .touch { fill: #faece7; stroke: #993c1d; }
+.loopd .obs { fill: #e1f5ee; stroke: #0f6e56; }
+.loopd .soon { fill: none; stroke: #6b6a65; stroke-width: 1.2; stroke-dasharray: 5 4; }
+.loopd .ln { fill: none; stroke: #4a554f; stroke-width: 1.5; marker-end: url(#arr); }
+.loopd .ar { fill: none; stroke: #4a554f; stroke-width: 1.5; }
+.sw.touch { background: #faece7; border-color: #993c1d; }
+.sw.soon { background: transparent; border: 1px dashed #6b6a65; }
+.sub { font-size: 1.15rem; margin: 30px 0 4px; }
+.launch strong { font-family: var(--mono); letter-spacing: .5px; }
 .legend { list-style: none; padding: 0; margin: 12px 0 0; display: flex; flex-wrap: wrap; gap: 8px 22px; font-size: 14px; }
 .legend .sw { display: inline-block; width: 14px; height: 14px; border-radius: 3px; margin-right: 8px; vertical-align: -2px; border: 1px solid var(--line); }
 .sw.person { background: #fbeccb; }

@@ -64,7 +64,7 @@ const start = (root, id) => assert.equal(aos(root, ['run', 'start', id]).status,
 const finish = (root, id, outcome, extra = []) => assert.equal(aos(root, ['run', 'finish', id, '--outcome', outcome, '--evidence', '.analucia/evidence/report.md', ...extra]).status, 0);
 const draft = (root, id, { verify = true } = {}) => {
   writeFileSync(join(root, '.analucia', 'drafts', `${id}.md`), ORDER(id));
-  if (verify) writeFileSync(join(root, '.analucia', 'drafts', `${id}.json`), VERIFY(id));
+  if (verify) writeFileSync(join(root, '.analucia', 'drafts', `${id}.request.md`), '- a point of the request => the draft'), writeFileSync(join(root, '.analucia', 'drafts', `${id}.json`), VERIFY(id));
 };
 const CMD = `node "${AOS_BIN}"`;
 

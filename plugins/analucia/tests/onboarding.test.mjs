@@ -51,7 +51,7 @@ test('a dry run with the es answers file writes nothing, and prints the plan in 
   const before = snapshot(root);
   const r = aos(root, ['init', '--answers', ES, '--dry-run']);
   assert.equal(r.status, 0, r.stderr);
-  assert.match(r.stdout, /^Plan de arranque/);
+  assert.match(r.stdout, /^Proyecto: [^\n]+\nPlan de arranque/);
   assert.match(r.stdout, /Respuestas[\s\S]*Configuración[\s\S]*Simulación: no se escribió nada\./);
   assert.match(r.stdout, /budget_monthly_usd: Presupuesto desconocido: se registra 0 y las alertas de costo quedan apagadas\./);
   assert.match(r.stdout, /Perfil de permisos \(\.claude\/settings\.json\): creado/);
@@ -122,7 +122,7 @@ test('the safe defaults are applied when answers are unknown', async () => {
   await runInit(root, { provided: { budget_monthly_usd: 120, risk_default: 'high', never_leaves: ['secrets/**', 'customer data'] }, locale: 'en', ...CONFIRM, out });
   assert.equal(JSON.parse(readFileSync(join(root, '.analucia', 'project.json'), 'utf8')).budget_monthly_usd, 120);
   const s = JSON.parse(readFileSync(join(root, '.claude', 'settings.json'), 'utf8'));
-  assert.ok(s.permissions.ask.includes('Edit(//**)') && !s.permissions.allow.includes('Edit(/**)'), 'high: every edit asks');
+  assert.deepEqual(s.permissions.ask, [], 'high: nothing asks either (ORD-0044 part 7)');
   assert.ok(s.permissions.deny.includes('Read(secrets/**)') && s.permissions.deny.includes('Edit(secrets/**)'));
   assert.ok(!s.permissions.deny.some((r) => r.includes('customer data')), 'free text is recorded, not turned into a rule');
   const last = readLog(root).events.at(-1);

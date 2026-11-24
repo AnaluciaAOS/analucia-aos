@@ -81,7 +81,7 @@ test('closing path: empty folder → launchers → init → first draft → plac
   assert.match(agent(dir, ['drafts']).stdout, /Next free ID: DEMO-0001/);
   mkdirSync(join(dir, '.analucia', 'drafts'), { recursive: true });
   writeFileSync(join(dir, '.analucia', 'drafts', 'DEMO-0001.md'), ['---', 'id: DEMO-0001', 'title: Write the first page', 'kind: build', 'replaces: []', 'created: 2026-11-14', 'budget_max_minutes: 30', 'budget_max_attempts: 2', 'risk: low', 'cost_effect: none', '---', '', '# DEMO-0001', '', 'Write `hello.txt` with one line.', '', '## Business rules', '', '- none', '', '## Acceptance criteria', '', '- [ ] `hello.txt` exists and is not empty.', ''].join('\n'));
-  writeFileSync(join(dir, '.analucia', 'drafts', 'DEMO-0001.json'), `${JSON.stringify({ order: 'DEMO-0001', checks: [{ name: 'the page exists', run: 'test -s hello.txt', expect_exit: 0 }, { name: 'the report ends with an outcome', run: "tail -1 .analucia/evidence/DEMO-0001/report.md | grep -q '^OUTCOME: '", expect_exit: 0 }] }, null, 2)}\n`);
+  writeFileSync(join(dir, '.analucia', 'drafts', 'DEMO-0001.request.md'), '- a point of the request => the draft'), writeFileSync(join(dir, '.analucia', 'drafts', 'DEMO-0001.json'), `${JSON.stringify({ order: 'DEMO-0001', checks: [{ name: 'the page exists', run: 'test -s hello.txt', expect_exit: 0 }, { name: 'the report ends with an outcome', run: "tail -1 .analucia/evidence/DEMO-0001/report.md | grep -q '^OUTCOME: '", expect_exit: 0 }] }, null, 2)}\n`);
   const checked = agent(dir, ['drafts']);
   assert.equal(checked.status, 0, checked.stdout);
   assert.match(checked.stdout, /^DEMO-0001: ready — Write the first page$/m);

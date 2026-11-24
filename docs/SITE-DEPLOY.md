@@ -1,12 +1,26 @@
 # Putting the website online
 
-Current zip: built on 2026-11-10 from commit `ebf43d0` (the `site/` folder as it is in that commit).
+Current zip: built on 2026-11-21 from commit `e94a09f` (the `site/` folder as it is in that commit; the site of version 0.7.0, in four languages).
 
 For the owner. The site is five files and three language folders in `site/`. They are packed into one file, `analucia-site.zip`, that you upload to your hosting. It runs on any shared hosting with cPanel (Apache); nothing has to be installed.
 
+## One click (PUBLICAR-SITIO)
+
+Next to the zip, in `../analucia-lab/site-release/`, there is `PUBLICAR-SITIO.cmd` (Windows) and `PUBLICAR-SITIO.sh` (macOS and Linux). Click it and it uploads `analucia-site.zip` to the domain's folder, extracts it there, deletes the zip from the server and says in one line what it did and the address to check. It uses the cPanel API with a token you create ([UAPI Fileman::upload_files](https://api.docs.cpanel.net/openapi/cpanel/operation/upload_files), [API tokens](https://docs.cpanel.net/knowledge-base/security/how-to-use-cpanel-api-tokens/), [API 2 Fileman::fileop](https://api.docs.cpanel.net/cpanel-api-2/cpanel-api-2-modules-fileman/cpanel-api-2-functions-fileman-fileop)). It is not part of this repository: nothing in it is a secret, but it lives in the lab folder with the zip.
+
+One-time setup:
+
+1. In cPanel, open **Manage API Tokens** (under Security), create a token with a name such as `publicar-sitio`, and copy it. It is shown once.
+2. Click `PUBLICAR-SITIO.cmd` once. It creates `site-deploy.json` in that folder and says what to fill: `host` (your cPanel server name, without `https://`), `user` (your cPanel user), `folder` (the domain folder in your home folder, `analuciaaos.com`) and `domain` (the address of the site). The file holds no secret.
+3. Click again. It asks you to paste the token (nothing shows while you paste) and asks if it may save it. On Windows, answer `S`: it is saved encrypted for your Windows user only, in `%LOCALAPPDATA%\AnaluciaAOS\`, never in a repository, the lab folder or a log, and later clicks need nothing more (one click). On macOS and Linux there is no place to keep a token without installing something, so the `.sh` asks for it each time (one click and one paste).
+
+To try it without sending anything: `PUBLICAR-SITIO.cmd -DryRun` (or `./PUBLICAR-SITIO.sh --dry-run`). It prints the three calls it would make and sends nothing. The first real upload is your click. After it, check the page as in section 2. The launcher overwrites the files of the zip and leaves any other file of the folder as it is; if an old version had files the new one no longer has, remove them in File Manager. If the hosting refuses the API, use the manual steps below.
+
+## Manual steps (the fallback)
+
 Where the zip is: `../analucia-lab/site-release/analucia-site.zip` (next to this repository, never inside it). It holds `index.html`, `privacy.html`, `style.css`, `robots.txt`, `.htaccess` and the folders `es/`, `pt/` and `hi/` (one `index.html` each: Spanish, Portuguese and Hindi), with `index.html` at the top level.
 
-## 1. Upload and extract (about 5 minutes)
+## 1. Upload and extract by hand (about 5 minutes)
 
 1. Sign in to cPanel and open **File Manager**.
 2. Open the folder **`analuciaaos.com`**: the folder cPanel created for that domain.

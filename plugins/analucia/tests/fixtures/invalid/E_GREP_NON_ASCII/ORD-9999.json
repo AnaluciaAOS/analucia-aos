@@ -1,0 +1,10 @@
+{
+  "order": "ORD-9999",
+  "checks": [
+    {
+      "name": "the report has the section (grep over text with an accent)",
+      "run": "grep -q 'acción' report.md",
+      "expect_exit": 0
+    }
+  ]
+}

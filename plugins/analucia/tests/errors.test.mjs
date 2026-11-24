@@ -124,9 +124,12 @@ test('docs/INDEX.md: plugin version on line 1, every command, error page and spe
   const version = JSON.parse(readFileSync(join(PLUGIN, '.claude-plugin', 'plugin.json'), 'utf8')).version;
   assert.equal(index.split(/\r?\n/)[0], `analucia docs for plugin version ${version}`);
   for (const code of Object.keys(ERRORS)) assert.ok(index.includes(`(errors/${code}.md)`), `INDEX lists ${code}`);
+  // ORD-0047 part 14 (OBS-187): the index lists each spec by id and pins no version; the version is the spec's own.
   for (const f of readdirSync(join(REPO, 'core')).filter((n) => n.endsWith('.md'))) {
     const t = readFileSync(join(REPO, 'core', f), 'utf8');
-    assert.ok(index.includes(`\`core/${f}\` — ${/^id: (\S+)/m.exec(t)[1]} version ${/^version: (\S+)/m.exec(t)[1]}`), `INDEX lists ${f} with its version`);
+    assert.ok(/^version: \S+/m.test(t), `${f} has its own version line`);
+    const line = index.split(/\r?\n/).find((l) => l.startsWith(`- \`core/${f}\``));
+    assert.equal(line, `- \`core/${f}\` — ${/^id: (\S+)/m.exec(t)[1]}`, `INDEX lists ${f} by id, with no version pinned`);
   }
   const usage = run([]).stderr;
   for (const cmd of ['validate', 'event append', 'verify-log', 'derive', 'history', 'run start', 'run finish', 'verify', 'close', 'halt', 'resume', 'check-writeback', 'agents-md sync', 'check-roles', 'check-push', 'install-git-hooks', 'explain']) {

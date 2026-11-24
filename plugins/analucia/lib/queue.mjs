@@ -2,6 +2,7 @@
 // ones it depends on, then by id — with its state in the owner's words and the next actor.
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { listDrafts } from './drafts.mjs';
 import { LOCALES, catalog } from './onboarding.mjs';
 import { readLog } from './log.mjs';
 import { nextActionBy } from './owner-sheet.mjs';
@@ -10,7 +11,13 @@ import { parseFrontMatter } from './validate.mjs';
 
 // Terminal without a signature (rejected, superseded, cancelled) leaves the queue too: nothing is left to do.
 const DONE = new Set(['closed', 'rejected', 'superseded', 'cancelled']);
-const byId = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
+
+// ORD-0047 part 9 (OBS-211): the queue the director set with `aos queue set` is the last operation.logged "queue.set";
+// the orders in it run first, in its order; the others follow in the order of admission (the order they were placed).
+export function explicitQueue(events) {
+  const hit = [...events].reverse().find((e) => e.type === 'operation.logged' && e.payload?.operation === 'queue.set' && Array.isArray(e.payload.ids));
+  return hit ? hit.payload.ids : [];
+}
 
 function orderFile(root, id) {
   const p = join(root, '.analucia', 'orders', `${id}.md`);
@@ -23,7 +30,12 @@ function orderFile(root, id) {
 
 // orders: the derived state's orders map. Returns [{ id, state, next, title, depends_on }] in queue order.
 export function buildQueue(root, orders) {
-  const open = Object.keys(orders).filter((id) => !DONE.has(orders[id].state)).sort(byId);
+  let events = [];
+  try { events = readLog(root).events; } catch { /* no log: no metric, no explicit queue */ }
+  const explicit = explicitQueue(events);
+  const admission = Object.keys(orders);
+  const rank = (id) => (explicit.includes(id) ? explicit.indexOf(id) : explicit.length + admission.indexOf(id));
+  const open = Object.keys(orders).filter((id) => !DONE.has(orders[id].state)).sort((a, b) => rank(a) - rank(b));
   const info = Object.fromEntries(open.map((id) => [id, orderFile(root, id)]));
   const openSet = new Set(open);
   // Kahn's algorithm over the open orders; a dependency that is already done (or unknown) is satisfied.
@@ -38,12 +50,10 @@ export function buildQueue(root, orders) {
     out.push(next);
   }
   // ORD-0042 part 6: the metric of each order that has a recorded decision (measured from the log).
-  let events = [];
-  try { events = readLog(root).events; } catch { /* no log: no metric */ }
   return out.map((id) => ({ metric: metricOf(events, id), id, state: orders[id].state, next: nextActionBy(orders[id]), title: info[id].title, depends_on: info[id].depends_on, continues: info[id].continues }));
 }
 
-export function queueText(queue, locale = 'en', waived = []) {
+export function queueText(queue, locale = 'en', waived = [], drafts = []) {
   const t = catalog(LOCALES.includes(locale) ? locale : 'en');
   const out = [`# ${t('queue.title')}`, '', t('queue.intro'), ''];
   if (!queue.length) out.push(t('queue.empty'));
@@ -52,7 +62,9 @@ export function queueText(queue, locale = 'en', waived = []) {
   queue.forEach((q, i) => {
     out.push(`${i + 1}. ${q.id}${q.continues ? ` (${t('queue.continues')} ${q.continues})` : ''} — ${t(`queue.state.${q.state}`)} (${q.state}) — ${t('queue.next')}: ${q.next}${q.title ? ` — ${q.title}` : ''}${q.metric && q.metric.minutes !== null ? ` — ${t('queue.metric', { minutes: q.metric.minutes, steps: q.metric.owner_steps })}` : ''}`);
   });
-  return `${[...out, ...tail].join('\n')}\n`;
+  // AMD-0029 item 7: a draft named by topic is shown by its topic until it has a number.
+  const draftLines = drafts.map((topic) => `- ${t('queue.draft_topic', { topic })}`);
+  return `${[...out, ...(draftLines.length ? ['', ...draftLines] : []), ...tail].join('\n')}\n`;
 }
 
 export function writeQueueView(root, queue) {
@@ -62,7 +74,9 @@ export function writeQueueView(root, queue) {
   mkdirSync(dir, { recursive: true });
   let waived = [];
   try { waived = waivedOrders(readLog(root).events); } catch { /* no log: nothing was waived */ }
-  const text = queueText(queue, locale, waived);
+  let drafts = [];
+  try { drafts = listDrafts(root).filter((d) => d.topic).map((d) => d.topic); } catch { /* no drafts folder */ }
+  const text = queueText(queue, locale, waived, drafts);
   writeFileSync(join(dir, 'queue.md'), text);
   return text;
 }

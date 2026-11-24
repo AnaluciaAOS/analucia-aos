@@ -152,6 +152,17 @@ export function movingRefSeverity(events, orderId) {
   return plugin && versionAtLeast(plugin, MOVING_REF_SINCE) ? 'error' : 'warning';
 }
 
+// ORD-0047 part 4: the rule against grep over non-ASCII text. null for an order that is closed (its verify file is history);
+// 'error' for an order with no record yet or admitted with pins.plugin >= GREP_ASCII_SINCE; 'warning' for one admitted earlier.
+export const GREP_ASCII_SINCE = '0.9.0';
+export function grepAsciiSeverity(events, orderId) {
+  if (events.some((e) => e?.subject === orderId && e.type === 'order.state_changed' && e.payload?.to === 'closed')) return null;
+  const created = events.find((e) => e?.type === 'record.created' && e.subject === orderId);
+  if (!created) return 'error';
+  const plugin = created.payload?.pins?.plugin;
+  return plugin && versionAtLeast(plugin, GREP_ASCII_SINCE) ? 'error' : 'warning';
+}
+
 // The newest commit whose message has the trailer line "Analucia-Order: <id>" (full SHA), or null.
 export function resolveOrderCommit(root, id) {
   const pattern = `^Analucia-Order: ${id.replace(/[.]/g, '\\.')}$`;

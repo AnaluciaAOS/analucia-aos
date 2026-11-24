@@ -114,7 +114,7 @@ test('a stored credential user that differs from github_owner gets exactly the o
   const root = folder({ url: 'https://example@github.com/example/demo.git', cred: 'other-account' });
   const r = byName(checks(root, () => ({ ok: true, ms: 1 })));
   assert.equal(r.account.status, 'FAIL');
-  assert.equal(r.account.next.vars.cmds, '\n      git config credential.https://github.com.username example');
+  assert.ok(r.account.next.vars.cmds.endsWith('\n      git config credential.https://github.com.username example'), r.account.next.vars.cmds);
   // When ls-remote fails, the one-line command that reaches GitHub with that account (OBS-097).
   const down = reportText(checks(root));
   assert.ok(down.includes('\n      git -c credential.https://github.com.username=example ls-remote https://example@github.com/example/demo.git'), down);

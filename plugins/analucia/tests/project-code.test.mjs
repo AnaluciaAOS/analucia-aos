@@ -71,7 +71,7 @@ const setCode = (root, code) => {
 };
 const draft = (root, id, { md = order(id), json = verifyFile(id) } = {}) => {
   if (md !== null) writeFileSync(join(root, '.analucia', 'drafts', `${id}.md`), md);
-  if (json !== null) writeFileSync(join(root, '.analucia', 'drafts', `${id}.json`), json);
+  if (json !== null) writeFileSync(join(root, '.analucia', 'drafts', `${id}.request.md`), '- a point of the request => the draft'), writeFileSync(join(root, '.analucia', 'drafts', `${id}.json`), json);
 };
 const owner = (answers) => {
   const lines = [];

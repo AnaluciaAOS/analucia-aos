@@ -10,6 +10,16 @@
       "name": "every commit of this order that changes code carries its trailer (the rule of the push guard; never a hand-written check)",
       "run": "node plugins/analucia/bin/aos.mjs trailer check ORD-NNNN --from 8ea118d",
       "expect_exit": 0
+    },
+    {
+      "name": "not worse than before: no test that passed in the baseline fails now (the preflight records the baseline)",
+      "run": "node plugins/analucia/bin/aos.mjs tests compare ORD-NNNN",
+      "expect_exit": 0
+    },
+    {
+      "name": "a text check is safe with accents (aos text has|lacks, never grep over non-ASCII text)",
+      "run": "node plugins/analucia/bin/aos.mjs text has .analucia/evidence/ORD-NNNN/report.md \"## Evidencia\"",
+      "expect_exit": 0
     }
   ]
 }

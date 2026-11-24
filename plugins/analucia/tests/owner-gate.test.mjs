@@ -66,7 +66,7 @@ function owner(decisions) {
   const left = [...decisions];
   const ask = async (q) => {
     lines.push(`ASK ${q}`);
-    if (/approve, comment or reject/.test(q)) return left.shift() ?? '';
+    if (/Type approve to approve/.test(q)) return left.shift() ?? '';
     if (/comment|reject/i.test(q)) return 'the table of prices is missing';
     return 'CLOSE';
   };

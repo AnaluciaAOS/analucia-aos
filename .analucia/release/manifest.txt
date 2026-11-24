@@ -41,6 +41,20 @@ core/NOMENCLATURE.md  # spec, not editable by the executor; line 4 holds a categ
 core/SPEC-0002-VERIFY-AND-GUARDS.md  # spec, not editable by the executor; line 4 holds a category 3 place name in prose (names list line 307)
 core/SPEC-0003-RULES-ERRORS-RISK-COST.md  # spec, not editable by the executor; line 4 holds a category 3 place name in prose (names list line 307)
 core/SPEC-0004-OWNER-SHEET-AND-SELF-GOVERNANCE.md  # spec, not editable by the executor; line 4 holds a category 3 place name in prose (names list line 307)
+INICIAR.cmd  # the owner's click launcher of this repository (ORD-0044), not part of the product
+INICIAR.sh  # the owner's click launcher of this repository (ORD-0044), not part of the product
+FIRMAR.cmd  # the owner's click launcher of this repository (ORD-0044), not part of the product
+FIRMAR.sh  # the owner's click launcher of this repository (ORD-0044), not part of the product
+DETENER.cmd  # the owner's click launcher of this repository (ORD-0044), not part of the product
+DETENER.sh  # the owner's click launcher of this repository (ORD-0044), not part of the product
+REANUDAR.cmd  # the owner's click launcher of this repository (ORD-0044), not part of the product
+REANUDAR.sh  # the owner's click launcher of this repository (ORD-0044), not part of the product
+IMPORTAR.cmd  # the owner's click launcher of this repository (ORD-0044), not part of the product
+IMPORTAR.sh  # the owner's click launcher of this repository (ORD-0044), not part of the product
+REPARAR.cmd  # the owner's click launcher of this repository (ORD-0044), not part of the product
+REPARAR.sh  # the owner's click launcher of this repository (ORD-0044), not part of the product
+ACTUALIZAR.cmd  # the owner's click launcher of this repository (ORD-0044), not part of the product
+ACTUALIZAR.sh  # the owner's click launcher of this repository (ORD-0044), not part of the product
 ref: refs/remotes/origin/backup/2026-10-27  # the backup branch named in the ORD-0028 report (commit 74a1d80); its history holds findings and the personal commit identity
 
 [notes]

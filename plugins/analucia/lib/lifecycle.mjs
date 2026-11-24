@@ -15,6 +15,9 @@ import { missingLine, reportCheck } from './report.mjs';
 import { pushAccountProblems, pushAccountRemotes, pushGuardStatus } from './guards.mjs';
 import { RuleError, replay } from './state.mjs';
 import { parseFrontMatter, validateOrderText, validateVerifyText } from './validate.mjs';
+import { baselineRel, testsBaseline } from './not-worse.mjs';
+import { readProject } from './cost.mjs';
+import { scanFiles } from './denylist.mjs';
 import { ORDER_COMMIT, readBranches, resolveOrderCommit, resolveRun, usesOrderCommit } from './verify-refs.mjs';
 import { renderedNext } from './errors.mjs';
 
@@ -85,6 +88,16 @@ export function runPreflight(root, id, { now = new Date(), onCheck = () => {}, o
   // ORD-0043 part 12: and the built-in check "push guard installed": the guard itself is where git looks for it.
   const guard = pushGuardStatus(root);
   if (guard) builtin.push({ name: 'push guard installed', passed: guard.passed, detail: guard.detail });
+  // ORD-0047 part 3 (OBS-205): a project that names its tests (project.json "tests") has its baseline recorded by the
+  // preflight, on the tree as it is before the work: once per order (an existing baseline is never overwritten).
+  if (readProject(root)?.tests && !existsSync(join(root, baselineRel(id)))) {
+    try {
+      const b = testsBaseline(root, id, { now });
+      builtin.push({ name: 'tests baseline', passed: true, detail: `${b.ran} test(s) recorded in ${b.path}; ${b.failing.length} already failing` });
+    } catch (x) {
+      builtin.push({ name: 'tests baseline', passed: false, detail: `the tests of the project did not run: ${x.message}` });
+    }
+  }
   if (!preflight.length && !builtin.length) return { has: false, file: rel };
   const bash = findBash();
   const report = [`# aos preflight ${id} at ${timestampFor(root, now)}`, '', `verify file: ${rel}`, `shell: ${bash}`, ''];
@@ -135,9 +148,14 @@ export function admit(root, id, { now = new Date(), pluginVersion = currentPlugi
   // ORD-0034 §6: a verify file whose checks end a git range at a moving ref is refused (an error: the order has no record yet).
   const vrel = `.analucia/verify/${id}.json`;
   if (existsSync(join(root, vrel))) {
-    const refs = validateVerifyText(readFileSync(join(root, vrel), 'utf8'), `${id}.json`, { movingRefs: { severity: 'error', branches: readBranches(root) } });
+    const refs = validateVerifyText(readFileSync(join(root, vrel), 'utf8'), `${id}.json`, { movingRefs: { severity: 'error', branches: readBranches(root) }, grepAscii: true });
     if (refs.length) throw new RuleError(refs[0].code, `${vrel}:${refs[0].line}: ${refs[0].message}`);
   }
+  // ORD-0047 part 13 (OBS-191): the release guard's matcher over the order's own files, tracked or not.
+  const own = [rel, vrel, orderFields(root, id).get('rollback')?.value ?? `.analucia/rollback/${id}.md`, `.analucia/drafts/${id}.request.md`];
+  const deny = scanFiles(root, readProject(root) ?? {}, own);
+  if (deny.missing) throw new RuleError('E_DENYLIST_FILE', `admission refused: .analucia/project.json names a release_denylist and ${deny.missing}`);
+  if (deny.hits.length) throw new RuleError('E_DENYLIST_FILE', `admission refused: a forbidden name is in ${deny.hits.join(', ')}`);
   const { events } = readLog(root);
   if (replay(events).records[id]) throw new RuleError('E_RECORD_EXISTS', `${id} already exists in the event log`);
   // ORD-0041 part 4 (AMD-0015 §4): the start conditions of the order are tried before it is admitted.

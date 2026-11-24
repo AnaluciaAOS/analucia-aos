@@ -34,9 +34,9 @@ const FORBIDDEN = [
   /analytics/, /gtag/, /googletagmanager/, /tracking pixel/,
 ];
 
-test('one scrolling page with the six views in order and the five navigation anchors (ORD-0032: the pricing view)', () => {
+test('one scrolling page with the seven views in order and the five navigation anchors (ORD-0032: the pricing view)', () => {
   const html = read('index.html');
-  assert.deepEqual([...html.matchAll(/<section class="view[^"]*" id="([^"]+)"/g)].map((m) => m[1]), ['top', 'how', 'loop', 'see', 'start', 'pricing']);
+  assert.deepEqual([...html.matchAll(/<section class="view[^"]*" id="([^"]+)"/g)].map((m) => m[1]), ['top', 'how', 'loop', 'see', 'next', 'start', 'pricing']); // ORD-0044 part 6: "coming next" sits before Get started
   const nav = /<nav aria-label="Sections">([\s\S]*?)<\/nav>/.exec(html)[1];
   assert.deepEqual([...nav.matchAll(/<a href="#([^"]+)">([^<]+)<\/a>/g)].map((m) => [m[1], m[2]]), [['how', 'How it works'], ['see', 'What you see'], ['start', 'Get started'], ['pricing', 'Pricing'], ['talk', 'Talk to us']]);
   for (const t of ['Hand the work to AI.', 'Keep the decisions.', 'Three roles.', 'One of them is you.', 'Six steps.', 'Every one leaves a trace.', 'One screen to decide.', 'Plain words.', 'Four steps.', 'Then your first hour.', 'Rule of the loop:', 'Tamper-evident log.', 'Honest limits']) {
@@ -230,19 +230,36 @@ test('G: "Before you start" comes before the install steps, with the checks, the
   assert.match(html, /Open Claude Code in that same folder<span class="hint">Not in a subfolder/); // ORD-0032 A.1: no more "nothing to type"
 });
 
-test('H: the loop diagram is inline SVG with six steps, a gate, a dashed return, a legend, descriptions and an actor filter', () => {
-  const html = index();
-  const svg = /<svg class="flow"[\s\S]*?<\/svg>/.exec(html)[0];
-  assert.deepEqual([...svg.matchAll(/<g data-step="(\w+)" data-actor="(\w+)">/g)].map((m) => [m[1], m[2]]),
-    [['order', 'person'], ['admit', 'auto'], ['build', 'auto'], ['verify', 'gate'], ['deliver', 'deliverable'], ['sign', 'person']]);
-  assert.match(svg, /<path class="n gate" d="M/, 'verify is a diamond');
-  assert.match(svg, /class="loopback"/);
-  assert.match(svg, /continuous improvement/);
-  assert.match(svg, /role="img" aria-labelledby="flow-svg-t flow-svg-d"/);
-  assert.equal((html.match(/<li data-step="\w+" data-actor="\w+"><strong>/g) ?? []).length, 6, 'the six descriptions stay visible without JavaScript');
-  assert.equal((html.match(/<i class="sw /g) ?? []).length, 5, 'legend: person, automatic, gate, deliverable, improvement');
-  assert.deepEqual([...html.matchAll(/data-filter="(\w+)"/g)].map((m) => m[1]), ['all', 'person', 'auto', 'gate', 'deliverable']);
-  assert.match(html, /<p class="flow-info" id="flow-info" aria-live="polite">/);
+// ORD-0044 part 6 (AMD-0022): the diagram of 0.7.0 replaces the six-step flow (ORD-0026): the owner's two touches, the
+// observations that become rules, the orchestrator and the metrics as "coming next"; no model is named; no actor filter.
+test('H (ORD-0044): the loop diagram is inline SVG with id loop-diagram, four steps, two touches, observations, two coming-next boxes, a legend and no model name', () => {
+  for (const [p] of LANGS) {
+    const html = read(p);
+    const svg = /<svg class="loopd" id="loop-diagram"[\s\S]*?<\/svg>/.exec(html)?.[0];
+    assert.ok(svg, `${p}: the diagram`);
+    assert.match(svg, /role="img" aria-labelledby="loop-svg-t loop-svg-d"/);
+    assert.match(svg, /<title id="loop-svg-t">[^<]+<\/title>\s*<desc id="loop-svg-d">[^<]+<\/desc>/);
+    assert.equal((svg.match(/class="b step"/g) ?? []).length, 3, `${p}: order, run, verification`);
+    assert.equal((svg.match(/class="b touch"/g) ?? []).length, 1, `${p}: the signature`);
+    assert.equal((svg.match(/class="s tt"/g) ?? []).length, 2, `${p}: the owner's two touches`);
+    assert.equal((svg.match(/class="b obs"/g) ?? []).length, 1, `${p}: observations`);
+    assert.equal((svg.match(/class="b soon"/g) ?? []).length, 2, `${p}: orchestrator and metrics, coming next`);
+    assert.match(svg, /CLOSE/); assert.match(svg, /MERGE/);
+    assert.equal((html.match(/<i class="sw /g) ?? []).length, 2, `${p}: legend: your touch, coming next`);
+    assert.doesNotMatch(html, /data-filter|flow-info|flow-list/, `${p}: the old actor filter is gone`);
+    assert.doesNotMatch(svg + prose(html), /\b(opus|sonnet|haiku|fable|gpt)\b/i, `${p}: the models are not named`);
+  }
+});
+
+test('ORD-0044 part 6: "coming next" is marked not available, has no date, and the 0.7.0 facts are on every page', () => {
+  for (const [p] of LANGS) {
+    const html = read(p);
+    const sec = /<section class="view" id="next" data-status="not-available"[\s\S]*?<\/section>/.exec(html)?.[0];
+    assert.ok(sec && sec.includes('id="h-next"'), `${p}: the section`);
+    assert.doesNotMatch(prose(sec), /\d/, `${p}: no date and no figure in the coming-next section`);
+    for (const w of ['MERGE', 'PLACE', 'CLOSE', 'FIRMAR', 'INICIAR', 'DETENER', 'REANUDAR', 'IMPORTAR', 'REPARAR', 'ACTUALIZAR', 'STOP', 'ALTO', 'PARA']) assert.ok(html.includes(w), `${p}: ${w}`);
+    assert.equal((html.match(/<li class="card"><p><strong>(INICIAR|FIRMAR|DETENER|REANUDAR|IMPORTAR|REPARAR|ACTUALIZAR)<\/strong>/g) ?? []).length, 7, `${p}: the seven launchers, one line each`);
+  }
 });
 
 test('H: the sample orders panel says Example, shows the four states and an intact chain, and no figure', () => {

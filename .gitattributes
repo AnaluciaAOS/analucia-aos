@@ -13,3 +13,5 @@
 *.ico binary
 *.pdf binary
 *.zip binary
+# The marketplace file is LF on every checkout (ORD-0044).
+.claude-plugin/*.json text eol=lf

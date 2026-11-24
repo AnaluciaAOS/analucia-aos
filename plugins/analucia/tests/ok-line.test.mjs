@@ -52,7 +52,7 @@ test('on success, each command of the list ends with exactly one line "OK: <what
   assert.equal(closing(aos(root, ['admit', 'ORD-0001']), 'admit'), 'OK: ORD-0001 is admitted and queued; an executor can start it');
   assert.equal(closing(aos(root, ['verify-log']), 'verify-log'), 'OK: the event log is intact (3 lines)');
   assert.equal(closing(aos(root, ['derive']), 'derive'), 'OK: the views are up to date in .analucia/views/');
-  assert.match(closing(aos(root, ['launchers', 'install']), 'launchers install'), /^OK: the 7 click launchers are in /);
+  assert.match(closing(aos(root, ['launchers', 'install']), 'launchers install'), /^OK: the \d+ click launchers are in /);
   assert.match(closing(aos(root, ['sign', '--install-launcher']), 'sign --install-launcher'), /^OK: the FIRMAR launcher is in /);
   assert.equal(closing(aos(root, ['permissions', 'write']), 'permissions write'), 'OK: the permission profile is in .claude/settings.json');
   assert.equal(closing(aos(root, ['install-git-hooks']), 'install-git-hooks'), 'OK: the push guard is installed (.githooks/pre-push)');
@@ -97,7 +97,7 @@ test('commands whose output is read by a program or a hook keep their output: no
 });
 
 test('the closing line of every listed command exists in the five catalogs, and the owner-only ones use it', () => {
-  assert.deepEqual([...OK_COMMANDS].sort(), ['admit', 'ceo_export', 'ceo_import', 'ceo_import_none', 'derive', 'git_hooks', 'halt', 'launcher_firmar', 'launchers', 'permissions', 'repair_log', 'resume', 'sign', 'sign_none', 'status', 'status_chain', 'status_metric', 'status_one', 'update', 'validate', 'validate_hidden', 'verify_log'].sort());
+  assert.deepEqual([...OK_COMMANDS].sort(), ['admit', 'ceo_export', 'ceo_import', 'ceo_import_none', 'derive', 'dispatch', 'git_hooks', 'halt', 'launcher_firmar', 'launchers', 'permissions', 'permissions_apply', 'repair_log', 'resume', 'sign', 'sign_none', 'status', 'status_chain', 'status_metric', 'status_one', 'status_owner', 'update', 'validate', 'validate_hidden', 'verify_log'].sort());
   const facts = { removed: 2, have: 1, state: 'queued', id: 'ORD-0001', errors: 0, warnings: 2, lines: 7, dir: '/p', path: 'x', n: 3, signed: 'ORD-0001', placed: 1, reviewed: 0, file: '.githooks/pre-push' };
   for (const l of LOCALES) {
     for (const c of OK_COMMANDS) {

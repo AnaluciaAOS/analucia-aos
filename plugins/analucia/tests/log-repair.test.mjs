@@ -158,9 +158,10 @@ test('without a terminal it is refused, whatever is piped in; the REPARAR launch
   assert.deepEqual(readFileSync(logPath(root)), before);
   assert.ok(LAUNCHER_NAMES.includes('REPARAR'));
   const dir = mkdtempSync(join(tmpdir(), 'aos-repair-launch-'));
-  installLaunchers(dir, { locale: 'en' });
+  installLaunchers(dir, { locale: 'en', platform: 'win32' });
+  installLaunchers(dir, { locale: 'en', platform: 'linux' }); // ORD-0046 part 7: each system writes its own file; both texts are checked
   const names = readdirSync(dir);
   assert.ok(names.includes('REPARAR.cmd') && names.includes('REPARAR.sh'));
-  assert.match(readFileSync(join(dir, 'REPARAR.cmd'), 'utf8'), /" "%~dp0\." repair-log\r\n/);
-  assert.match(readFileSync(join(dir, 'REPARAR.sh'), 'utf8'), /" "\$PWD" repair-log\n/);
+  assert.match(readFileSync(join(dir, 'REPARAR.cmd'), 'utf8'), /" "%~dp0\." repair-log --project [^ \r\n]+\r\n/);
+  assert.match(readFileSync(join(dir, 'REPARAR.sh'), 'utf8'), /" "\$PWD" repair-log --project [^ \n]+\n/);
 });

@@ -26,11 +26,13 @@ const rev = (cwd, ref) => git(cwd, 'rev-parse', ref).stdout.trim();
 const branch = (cwd) => git(cwd, 'rev-parse', '--abbrev-ref', 'HEAD').stdout.trim();
 
 // A project on main with a bare remote, then a work branch (pushed) with one delivered order on it.
-function delivered({ remote = true } = {}) {
+// `trunk`: the name of the default branch; `hooks`: the push guard installed as the real projects have it
+// (`aos install-git-hooks`: a pre-push hook under core.hooksPath that runs the guard).
+function delivered({ remote = true, trunk = 'main', hooks = false } = {}) {
   const root = mkdtempSync(join(tmpdir(), 'aos-merge-'));
   const a = join(root, '.analucia');
   for (const d of ['orders', 'verify', 'evidence']) mkdirSync(join(a, d), { recursive: true });
-  writeFileSync(join(a, 'project.json'), '{"wip_limit":2,"locale":"en"}\n');
+  writeFileSync(join(a, 'project.json'), `${JSON.stringify({ wip_limit: 2, locale: 'en', ...(hooks ? { github_owner: 'example' } : {}) })}\n`);
   writeFileSync(logPath(root), '');
   writeFileSync(join(a, 'evidence', 'report.md'), '# r\n\n## Evidencia\n\nx\n\nOUTCOME: done\n');
   const id = 'ORD-0001';
@@ -42,7 +44,7 @@ function delivered({ remote = true } = {}) {
   appendEvent(root, { type: 'record.created', actor: 'director', subject: id });
   appendEvent(root, { type: 'order.state_changed', actor: 'director', subject: id, payload: { from: 'draft', to: 'ready' } });
   appendEvent(root, { type: 'order.state_changed', actor: 'director', subject: id, payload: { from: 'ready', to: 'queued' } });
-  git(root, 'init', '-q', '-b', 'main');
+  git(root, 'init', '-q', '-b', trunk);
   git(root, 'config', 'user.name', 't');
   git(root, 'config', 'user.email', 't@example.com');
   git(root, 'add', '-A');
@@ -50,9 +52,21 @@ function delivered({ remote = true } = {}) {
   let bare = null;
   if (remote) {
     bare = mkdtempSync(join(tmpdir(), 'aos-merge-bare-'));
-    git(bare, 'init', '-q', '--bare', '-b', 'main');
+    git(bare, 'init', '-q', '--bare', '-b', trunk);
     git(root, 'remote', 'add', 'origin', bare);
-    git(root, 'push', '-q', '-u', 'origin', 'main');
+    git(root, 'push', '-q', '-u', 'origin', trunk);
+  }
+  if (hooks) {
+    assert.equal(aos(root, ['install-git-hooks']).status, 0);
+    // The scratch remote is a local folder; the real ones are HTTPS GitHub remotes whose URL user is the account. The
+    // hook (the one the tool wrote) is given that URL, so the real guard runs on every push, trailers and account included.
+    const hook = join(root, '.githooks', 'pre-push');
+    writeFileSync(hook, readFileSync(hook, 'utf8').split('"$2"').join('"https://example@github.com/example/scratch.git"'), { mode: 0o755 });
+    git(root, 'config', '--local', 'credential.https://github.com.username', 'example');
+    git(root, 'add', '-A');
+    git(root, 'commit', '-q', '-m', 'Director: git hooks');
+    git(root, 'push', '-q', '--no-verify', 'origin', trunk); // set-up only: the hook is the thing under test afterwards
+    assert.equal(git(root, 'config', '--local', 'core.hooksPath').stdout.trim(), '.githooks');
   }
   git(root, 'switch', '-q', '-c', 'work');
   assert.equal(aos(root, ['run', 'start', id]).status, 0);
@@ -60,7 +74,7 @@ function delivered({ remote = true } = {}) {
   git(root, 'add', 'work.txt');
   git(root, 'commit', '-q', '-m', `work\n\nAnalucia-Order: ${id}`);
   assert.equal(aos(root, ['run', 'finish', id, '--outcome', 'done', '--evidence', '.analucia/evidence/report.md']).status, 0);
-  if (remote) git(root, 'push', '-q', '-u', 'origin', 'work');
+  if (remote) { const pu = git(root, 'push', '-q', '-u', 'origin', 'work'); assert.equal(pu.status, 0, pu.stderr); }
   return { root, bare, id };
 }
 const owner = (answers, extra = {}) => {
@@ -177,4 +191,37 @@ test('if the switch fails nothing further changes, and one line says so', async 
   assert.equal(rev(bare, 'main'), mainBefore);
   assert.equal(o.lines.filter((l) => /The step to main was not made/.test(l)).length, 1);
   assert.equal(readFileSync(join(root, 'work.txt'), 'utf8'), 'edited and not committed\n', 'the uncommitted edit is untouched');
+});
+
+// ORD-0047 part 10 (OBS-212): in the web project the step to main after signing stayed manual. The step is confirmed in
+// scratch projects that mirror the real set-ups: the plain one; the one with the push guard as a pre-push hook under
+// core.hooksPath (this repository, and the web project); and the one whose default branch is not called main. In each,
+// FIRMAR offers MERGE right after CLOSE, and the merge is a fast-forward pushed through the guard. The count is what the
+// report of ORD-0047 states as "Merge after close: offered in N of N set-ups".
+const SETUPS = [
+  { name: 'plain: main, no hook', opts: {} },
+  { name: 'pre-push guard under core.hooksPath', opts: { hooks: true } },
+  { name: 'default branch is master, with the guard', opts: { trunk: 'master', hooks: true } },
+];
+test('merge after close: offered right after CLOSE in every set-up, as a fast-forward pushed through the guard', async () => {
+  let offered = 0;
+  for (const { name, opts } of SETUPS) {
+    const trunk = opts.trunk ?? 'main';
+    const { root, bare, id } = delivered(opts);
+    const o = owner(['CLOSE', 'MERGE']);
+    const r = await sign(root, o);
+    assert.deepEqual(r.signed, [id], name);
+    // CLOSE is the first prompt and MERGE is the very next one: nothing else is asked in between
+    assert.equal(o.prompts.length, 2, `${name}: ${o.lines.join(" | ")} ${JSON.stringify(r)}`);
+    assert.match(o.prompts[1], /Type MERGE/, name);
+    if (r.merged?.offered) offered += 1;
+    assert.equal(r.merged?.done, true, `${name}: ${o.lines.join(' | ')}`);
+    assert.equal(r.merged.into, trunk, name);
+    assert.equal(branch(root), trunk, name);
+    assert.equal(rev(root, trunk), rev(root, 'work'), `${name}: the trunk is the signed commit`);
+    assert.equal(rev(bare, trunk), rev(root, 'work'), `${name}: pushed`);
+    assert.equal(git(root, 'rev-list', '--count', '--merges', trunk).stdout.trim(), '0', `${name}: no merge commit`);
+    assert.match(o.lines.join('\n'), /now holds the signed work/, name);
+  }
+  assert.equal(offered, SETUPS.length, `Merge after close: offered in ${offered} of ${SETUPS.length} set-ups`);
 });

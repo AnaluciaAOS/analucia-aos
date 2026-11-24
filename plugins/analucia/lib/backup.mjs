@@ -7,11 +7,14 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { gitNetwork } from './git-timeout.mjs';
 import { appendEvent, timestampFor } from './log.mjs';
 import { isEnvLike, tokenPatterns } from './secret-patterns.mjs';
 import { RuleError } from './state.mjs';
 
-const run = (root, args, env) => spawnSync('git', ['-C', root, ...args], { encoding: 'utf8', env: env ? { ...process.env, ...env } : process.env });
+const NETWORK = new Set(['ls-remote', 'fetch', 'push']);
+// ORD-0047 part 11: the calls that reach the remote have a time limit and never prompt; the others run as before.
+const run = (root, args, env) => (NETWORK.has(args[0]) ? gitNetwork(root, args, { env }) : spawnSync('git', ['-C', root, ...args], { encoding: 'utf8', env: env ? { ...process.env, ...env } : process.env }));
 const must = (r, what) => {
   if (r.status !== 0) throw new RuleError('E_BACKUP', `${what} failed: ${(r.stderr || r.stdout || '').trim().split('\n').at(-1)}`);
   return r.stdout.trim();

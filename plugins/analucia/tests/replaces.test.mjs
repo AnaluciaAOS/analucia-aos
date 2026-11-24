@@ -58,7 +58,7 @@ test('replaces: is an inline list of paths of the project; [] is a valid answer;
 test('aos drafts asks for it: a draft of kind build without the key is not ready, and the reason says what to write', () => {
   const root = project();
   writeFileSync(join(root, '.analucia', 'drafts', 'ORD-0001.md'), order('ORD-0001'));
-  writeFileSync(join(root, '.analucia', 'drafts', 'ORD-0001.json'), verifyFile('ORD-0001'));
+  writeFileSync(join(root, '.analucia', 'drafts', 'ORD-0001.request.md'), '- a point of the request => the draft'), writeFileSync(join(root, '.analucia', 'drafts', 'ORD-0001.json'), verifyFile('ORD-0001'));
   const d = listDrafts(root)[0];
   assert.equal(d.ok, false);
   assert.match(d.problems.join('\n'), /E_MISSING_FIELD .*build.* does not say what it replaces: list the paths in "replaces: \[…\]", or write "replaces: \[\]"/);

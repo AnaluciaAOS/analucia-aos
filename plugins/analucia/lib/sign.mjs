@@ -10,13 +10,19 @@ import { installLaunchers } from './launchers.mjs';
 import { WAIVER_MIN_REASON, close, failedGroups, sendBackForRework, verify, waiveFormChecks } from './lifecycle.mjs';
 import { appendEvent, readLog } from './log.mjs';
 import { reviewDocuments, waitingReviews } from './review.mjs';
+import { projectName } from './owner-status.mjs';
 import { LOCALES, catalog } from './onboarding.mjs';
+import { gitNetwork } from './git-timeout.mjs';
 import { RuleError, replay } from './state.mjs';
 import { parseFrontMatter } from './validate.mjs';
 
+// The owner's typed words: the English word as before, and the Spanish one (any case) next to it (ORD-0046 part 7).
+const wordIs = (answer, english, spanish) => answer.trim() === english || answer.trim().toUpperCase() === spanish;
+
 const git = (root, args) => spawnSync('git', ['-C', root, ...args], { encoding: 'utf8' });
 // The owner's own pushes (the step to main and the sign-off): the push guard's second lock lets them through (ORD-0043 part 16).
-const ownerPush = (root) => spawnSync('git', ['-C', root, 'push'], { encoding: 'utf8', env: { ...process.env, AOS_OWNER_PUSH: '1' } });
+// ORD-0047 part 11: with a time limit and no prompt, so a push never waits for ever.
+const ownerPush = (root) => gitNetwork(root, ['push'], { env: { AOS_OWNER_PUSH: '1' } });
 const localeOf = (root) => {
   try {
     const l = JSON.parse(readFileSync(join(root, '.analucia', 'project.json'), 'utf8')).locale;
@@ -46,6 +52,7 @@ async function placeWaitingDrafts(root, { t, ask, out, now }) {
   for (const d of drafts) {
     if (d.ok) {
       out(t('sign.draft_ok', { id: d.id, title: d.title }));
+      if (d.would_get) out(t('drafts.would_get', { would: d.would_get })); // ORD-0047 part 9: not yet given
       // ORD-0042 part 10: the business rules of the draft, with their examples, before the typed confirmation.
       if (d.rules?.length) {
         out(t('sign.draft_rules', { id: d.id, n: d.rules.length }));
@@ -61,7 +68,7 @@ async function placeWaitingDrafts(root, { t, ask, out, now }) {
   const notReady = drafts.filter((d) => !d.ok).map(({ id, problems }) => ({ id, problems }));
   if (!ready.length) return { placed: [], refused: notReady };
   const answer = await ask(t('sign.drafts_confirm', { ids: ready.join(', ') }));
-  if (answer.trim() !== 'PLACE') {
+  if (!wordIs(answer, 'PLACE', 'COLOCAR')) {
     out(t('sign.drafts_skipped'));
     return { placed: [], refused: notReady };
   }
@@ -84,6 +91,7 @@ async function placeWaitingDrafts(root, { t, ask, out, now }) {
 export async function sign(root, { isTTY, ask, out = () => {}, now = new Date(), push = true, open } = {}) {
   if (!isTTY) throw new RuleError('E_OWNER_TTY', 'signing needs the owner at an interactive terminal; stdin is not a TTY (agents cannot sign). The owner double-clicks FIRMAR or runs "aos sign" in their own terminal');
   const t = catalog(localeOf(root));
+  out(t('sign.project', { project: projectName(root) })); // ORD-0046 part 7: where the owner is, first of all
   const drafts = await placeWaitingDrafts(root, { t, ask, out, now });
   const result = await signOrders(root, { t, ask, out, now, push, open });
   // ORD-0041 part 7 (AMD-0015 §7): at least one order closed on a branch that is not the default branch, and the
@@ -130,7 +138,20 @@ async function signOrders(root, { t, ask, out, now, push, open }) {
     reviewed.push(...made);
     return made;
   };
-  for (const id of [...new Set(waitingDocs.map((d) => d.order))].sort()) if (orders[id]?.state !== 'delivered') await reviewOf(id);
+  // ORD-0046 part 7 (OBS-195): the orders he came for come first (drafts, then the delivered and verified orders, each
+  // with its own documents right before its checks). Documents of other open orders follow; the documents of orders
+  // already closed come last, under a heading that says so. A document changed by another order belongs to that order.
+  const docOrder = (d) => d.shownIn ?? d.order;
+  const isOpenOrder = (id) => orders[id] && !['closed', 'rejected', 'superseded', 'cancelled'].includes(orders[id].state);
+  const restOfDocuments = async () => {
+    const left = (docs) => docs.filter((d) => !reviewed.some((r) => r.path === d.path));
+    for (const id of [...new Set(left(waitingReviews(root)).map(docOrder))].filter((o) => isOpenOrder(o) && !['delivered', 'verified'].includes(orders[o]?.state)).sort()) await reviewOf(id);
+    const closedDocs = left(waitingReviews(root));
+    if (closedDocs.length) {
+      const made = await reviewDocuments(root, { t, ask, out, now, announce: false, docs: closedDocs, heading: t('review.closed_group', { n: closedDocs.length }), ...(open ? { open } : {}) });
+      reviewed.push(...made);
+    }
+  };
   const reworked = [];
   // ORD-0043 part 4: a blocked order is not offered for signature; one line says what it waits for and the command
   // that takes it out (part 3).
@@ -141,6 +162,7 @@ async function signOrders(root, { t, ask, out, now, push, open }) {
   const alreadyVerified = Object.keys(orders).filter((id) => orders[id].state === 'verified').sort();
   if (!delivered.length && !alreadyVerified.length) {
     out(t('sign.none'));
+    await restOfDocuments();
     return reviewed.length ? commitSignOff(root, { t, out, push, closed: [], failed: [], reviewed }) : { signed: [], failed: [], reviewed };
   }
   const passed = [];
@@ -189,18 +211,20 @@ async function signOrders(root, { t, ask, out, now, push, open }) {
     }
   }
   for (const id of alreadyVerified) {
+    await reviewOf(id);
     out(t('sign.checking', { id, title: titleOf(root, id) }));
     const ev = orders[id].evidence.filter((e) => e.level === 'verified').at(-1);
     if (ev?.path) out(t('sign.evidence', { path: ev.path }));
     out(t('sign.already', { id }));
     passed.push(id);
   }
+  await restOfDocuments();
   if (!passed.length) {
     if (failed.length || !reworked.length) out(t('sign.nothing_passed'));
     return reviewed.length ? commitSignOff(root, { t, out, push, closed: [], failed, reviewed }) : { signed: [], failed, reviewed };
   }
   const answer = await ask(t('sign.confirm', { ids: passed.join(', ') }));
-  if (answer.trim() !== 'CLOSE') {
+  if (!wordIs(answer, 'CLOSE', 'CERRAR')) {
     // The review decisions already made are kept and committed; no order is closed.
     if (reviewed.length) commitSignOff(root, { t, out, push, closed: [], failed, reviewed });
     throw new RuleError('E_NOT_CONFIRMED', t('sign.not_confirmed'));
@@ -233,7 +257,7 @@ async function offerStepToDefault(root, { t, ask, out }) {
   const branch = git(root, ['rev-parse', '--abbrev-ref', 'HEAD']).stdout.trim();
   const into = defaultBranch(root);
   if (!into || !branch || branch === 'HEAD' || branch === into) return undefined;
-  git(root, ['fetch', '-q', 'origin', into]); // what the remote has now; without a network the local knowledge is used
+  gitNetwork(root, ['fetch', '-q', 'origin', into]); // what the remote has now; without a network the local knowledge is used
   const commits = Number(git(root, ['rev-list', '--count', `refs/heads/${into}..HEAD`]).stdout.trim() || 0);
   const result = { offered: false, done: false, branch, into, commits };
   const contains = (ref) => git(root, ['rev-parse', '--verify', '-q', ref]).status !== 0 || git(root, ['merge-base', '--is-ancestor', ref, 'HEAD']).status === 0;
@@ -243,7 +267,7 @@ async function offerStepToDefault(root, { t, ask, out }) {
   }
   result.offered = true;
   const answer = await ask(t('sign.merge_offer', { branch, into, n: commits }));
-  if (answer.trim() !== 'MERGE') {
+  if (!wordIs(answer, 'MERGE', 'UNIR')) {
     out(t('sign.merge_skipped', { into, branch }));
     return result;
   }

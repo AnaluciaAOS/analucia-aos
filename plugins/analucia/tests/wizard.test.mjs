@@ -82,7 +82,7 @@ test('the language question switches every later text, the plan and the CONFIRM 
   const printed = [];
   await runInit(root, { provided, locale: 'en', isTTY: true, ask: async (q) => { asked.push(q); return 'CONFIRM'; }, out: (s) => printed.push(s), wizard: true });
   const plan = printed.join('\n');
-  assert.match(plan, /^Plan de arranque/);
+  assert.match(plan, /^(?:Proyecto: [^\n]+\n)?Plan de arranque/);
   assert.equal(asked[0].trim(), catalog('es')('plan.confirm').trim());
   assert.doesNotMatch(plan, new RegExp(catalog('es')('hosting.title').replace(/[()]/g, '\\$&')));
   assert.doesNotMatch(plan, /USD|\$\d/, 'no price table');

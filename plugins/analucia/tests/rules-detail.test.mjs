@@ -56,7 +56,7 @@ test('nothing moved is lost: the sentences that left the block are in the docume
     'Orders without pins (ORD-0001..0007) follow SPEC-0002.',
     '`aos cost record` / `aos cost status`: alerts at 50/80/100% inform the owner and never stop work.',
     'the remote URL user and the credential user must equal `github_owner` in `.analucia/project.json`; no credential in the URL (`E_SECRET_IN_URL`), no secret in added lines (`E_SECRET`).',
-    'force pushes, `git reset --hard`, `rm -rf` and reading `.env*`, `*.pem`, `*.key` are denied.',
+    'The ask list is empty: nothing asks.',
     'The owner\'s channel is one spreadsheet (`aos ceo export`); only the owner imports it (`aos ceo import <file>`, own TTY, `CONFIRM`). Agents never edit it.',
     'Asks are director files (`.analucia/asks/ASK-NNNN.md`, `aos ask open`); only the owner resolves them, through the sheet.',
     'INICIAR (`aos init`), FIRMAR (`aos sign`), DETENER (`aos halt`), REANUDAR (`aos resume`), IMPORTAR (`aos ceo import`), REPARAR (`aos repair-log`)',

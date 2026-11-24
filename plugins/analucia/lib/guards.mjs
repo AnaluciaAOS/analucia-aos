@@ -6,11 +6,14 @@ import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'nod
 import { PLUGIN_DIR, accountFixes, aosCommand, githubSlug } from './cli.mjs';
 import { fileURLToPath } from 'node:url';
 import { derive } from './derive.mjs';
+import { GIT_TIMEOUT_MS, applyFailFastConfig } from './git-timeout.mjs';
 import { NOT_FOUND_EXIT, RUNNER } from './launchers.mjs';
 import { resolveOrderCommit } from './verify-refs.mjs';
 import { writeHandoff } from './handoff.mjs';
 import { appendEvent, logPath, readLog, timestampFor, verifyChain } from './log.mjs';
+import { loadDenylist, matchingRules } from './denylist.mjs';
 import { tokenPatterns } from './secret-patterns.mjs';
+import { directorStatusLines } from './director-status.mjs';
 import { declaredDirector } from './session-names.mjs';
 import { sessionEnded, sessionStarted } from './sessions.mjs';
 import { RuleError } from './state.mjs';
@@ -40,6 +43,10 @@ export function sessionStart(root, input = {}) {
     out.push(`Analucia: could not derive the resume (${x.code ?? 'error'}: ${x.message}). Run "aos verify-log" and tell the director.`);
   }
   if (existsSync(haltPath(root))) out.push('', `HALT: ${haltText(root)}`);
+  // ORD-0047 part 6 (OBS-208): a session declared director starts from the state, not from memory.
+  try {
+    if (typeof input.session_id === 'string' && declaredDirector(root, input.session_id)) out.push('', ...directorStatusLines(root));
+  } catch { /* the line is a help; the resume above stands */ }
   const agent = { tool: 'claude-code' };
   if (typeof input.model === 'string') agent.model = input.model;
   if (typeof input.session_id === 'string') agent.session = input.session_id;
@@ -453,7 +460,8 @@ export function checkRoles(root) {
 
 // ---------- Right account ----------
 
-const git = (root, args) => spawnSync('git', ['-C', root, ...args], { encoding: 'utf8' });
+// ORD-0047 part 11: the guard's own git calls have the time limit too, so the hook never hangs the push it judges.
+const git = (root, args) => spawnSync('git', ['-C', root, ...args], { encoding: 'utf8', timeout: GIT_TIMEOUT_MS });
 
 export function urlUser(url) {
   try {
@@ -594,6 +602,27 @@ function commitChecks(root, commits) {
   return { trailers, secrets, late };
 }
 
+// ORD-0046 part 1 (OBS-198): every added line of every pushed commit, and every file name, against the list of
+// forbidden names that project.json names in release_denylist (a path; a relative one starts at the project folder).
+// Lines are "<commit> <file>:<line> (rule <n>)": never the word; a file whose own name is on the list is not named.
+function denylistProblems(root, commits, project) {
+  const key = project.release_denylist;
+  if (key === undefined || key === null) return { missing: null, hits: [] };
+  const loaded = loadDenylist(typeof key === 'string' && key ? resolve(root, key) : '');
+  if (loaded.error) return { missing: loaded.error, hits: [] };
+  const hits = [];
+  for (const sha of commits) {
+    const short = sha.slice(0, 7);
+    for (const a of addedLines(root, sha)) {
+      const named = matchingRules(loaded.rules, a.file).length > 0;
+      for (const rule of matchingRules(loaded.rules, a.text)) hits.push(`${short} ${named ? 'a file whose name is on the list' : a.file}:${a.line} (rule ${rule.id})`);
+    }
+    const names = git(root, ['diff-tree', '--no-commit-id', '--name-only', '-r', '--root', '-m', '--first-parent', sha]).stdout.split('\n').filter(Boolean);
+    for (const f of names) for (const rule of matchingRules(loaded.rules, f)) hits.push(`${short} a file name:0 (rule ${rule.id})`);
+  }
+  return { missing: null, hits };
+}
+
 const fail = (code, message, problems) => Object.assign(new RuleError(code, message), { problems });
 
 // ---------- The push account of each remote (ORD-0042 part 5) ----------
@@ -700,6 +729,9 @@ export function checkPush(root, { remote = 'origin', url, refs = [], env = proce
   // SPEC-0004 §4–§5: every commit being pushed.
   const { range, commits } = pushedCommits(root, remote);
   const { trailers, secrets, late } = commitChecks(root, commits);
+  const deny = denylistProblems(root, commits, project);
+  if (deny.missing) throw new RuleError('E_DENYLIST', `push refused: .analucia/project.json names a release_denylist and ${deny.missing}. The owner restores the file, or removes the key`);
+  if (deny.hits.length) throw fail('E_DENYLIST', `push refused: ${deny.hits.length} added line(s) or file name(s) in ${range} are on the list of forbidden names (words not shown)`, deny.hits);
   if (secrets.length) throw fail('E_SECRET', `push refused: ${secrets.length} added line(s) in ${range} match a secret pattern (values not shown)`, secrets);
   if (trailers.length) throw fail('E_NO_ORDER_TRAILER', `push refused: ${trailers.length} commit(s) in ${range} change code outside an order`, trailers);
   if (late.length) throw fail('E_COMMIT_AFTER_FINISH', `push refused: ${late.length} commit(s) in ${range} were made after the run of their order was finished, with no run open`, late);
@@ -771,5 +803,7 @@ export function installGitHooks(root, aosPath, { dryRun = false } = {}) {
   // ORD-0042 part 5: the account of each remote, in this repository's own configuration, so that the provider's
   // "choose an account" window has nothing to ask.
   const accounts = fixPushAccounts(root, { dryRun });
-  return { file: toPosix(relative(top, file)), changed: hookChanged || pathChanged || accounts.length > 0, created: !existed, accounts: accounts.map((a) => a.remote) };
+  // ORD-0047 part 11 (OBS-192): git fails at once instead of waiting for a typed password or an account window.
+  const failFast = applyFailFastConfig(root, { dryRun });
+  return { file: toPosix(relative(top, file)), changed: hookChanged || pathChanged || accounts.length > 0 || failFast.length > 0, fail_fast: failFast.map((c) => c.key), created: !existed, accounts: accounts.map((a) => a.remote) };
 }

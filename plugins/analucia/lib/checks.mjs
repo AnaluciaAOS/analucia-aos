@@ -9,6 +9,7 @@ import { accountFixes, aosCommand, forceAccountCommand, githubSlug, installComma
 import { directorLines, secretPatterns, urlUser } from './guards.mjs';
 import { appendEvent, isoWithOffset, projectTimeZone, readLog } from './log.mjs';
 import { personLocale } from './locale.mjs';
+import { ownerCommand, whichWindow } from './where.mjs';
 import { LOCALES, catalog } from './onboarding.mjs';
 
 const NO_PROMPT = { ...process.env, GIT_TERMINAL_PROMPT: '0', GCM_INTERACTIVE: 'never' };
@@ -34,7 +35,8 @@ const readJson = (p) => {
 };
 
 // Commands for a next line, each alone on its own indented line, so it can be copied as is (ORD-0029 B).
-const cmds = (list) => list.map((c) => `\n      ${c}`).join('');
+// ORD-0047 part 8 (OBS-210): the line before them says in which window they go.
+const cmds = (root, list) => `\n      ${whichWindow(root)}${list.map((c) => `\n      ${c}`).join('')}`;
 
 // Working-tree files, skipping .git and node_modules (for .env discovery and the inventory).
 function walk(root, dir = root, out = []) {
@@ -61,7 +63,7 @@ export function runChecks(root, { lsRemote: ls = lsRemote, now = new Date(), ins
   // "none" = the owner works without GitHub (wizard question 5); no command then names an account.
   const noGithub = project.github_owner === 'none';
   const owner = noGithub ? null : (project.github_owner ?? slug?.owner ?? null);
-  const nameOwner = { who: 'owner', key: 'account.next_no_owner', vars: { cmds: cmds([`${aosCommand()} init`]) } };
+  const nameOwner = { who: 'owner', key: 'account.next_no_owner', vars: { cmds: cmds(root, [ownerCommand(root, 'init')]) } };
   const later = (name) => add(name, 'WARN', { key: noGithub ? 'check.no_github' : 'check.later' }, { who: 'owner', key: noGithub ? 'check.next_no_github' : 'check.next_later' });
 
   // tools
@@ -78,10 +80,10 @@ export function runChecks(root, { lsRemote: ls = lsRemote, now = new Date(), ins
   // the remote wait for it (WARN) instead of failing with it.
   if (isRepo && url) add('repo', 'PASS', { key: 'repo.ok', vars: { url: url.replace(/:[^@/]*@/, ':***@') } });
   else if (noGithub) add('repo', 'WARN', { key: 'check.no_github' }, { who: 'owner', key: 'check.next_no_github' });
-  else if (!owner) add('repo', 'FAIL', { key: 'repo.fail' }, { who: 'owner', key: 'repo.next_no_owner', vars: { cmds: cmds([`${aosCommand()} init`]) } });
+  else if (!owner) add('repo', 'FAIL', { key: 'repo.fail' }, { who: 'owner', key: 'repo.next_no_owner', vars: { cmds: cmds(root, [ownerCommand(root, 'init')]) } });
   else {
     const steps = [...(isRepo ? [] : ['git init']), `git remote add origin https://${owner}@github.com/${owner}/${folder}.git`];
-    add('repo', 'FAIL', { key: 'repo.fail' }, { who: 'owner', key: 'repo.next', vars: { owner, repo: folder, cmds: cmds(steps) } });
+    add('repo', 'FAIL', { key: 'repo.fail' }, { who: 'owner', key: 'repo.next', vars: { owner, repo: folder, cmds: cmds(root, steps) } });
   }
 
   // account (Q-90)
@@ -94,7 +96,7 @@ export function runChecks(root, { lsRemote: ls = lsRemote, now = new Date(), ins
   else {
     // OBS-036, OBS-096, OBS-107: only the commands for what differs; a different credential user alone is one command.
     const fixes = accountFixes({ owner: project.github_owner, user, cred, url, folder });
-    add('account', 'FAIL', { key: 'account.fail', vars: { user: user ?? '—', cred: cred ?? '—', owner: project.github_owner } }, { who: 'owner', key: 'account.next', vars: { cmds: cmds(fixes) } });
+    add('account', 'FAIL', { key: 'account.fail', vars: { user: user ?? '—', cred: cred ?? '—', owner: project.github_owner } }, { who: 'owner', key: 'account.next', vars: { cmds: cmds(root, fixes) } });
   }
 
   // remote_https
@@ -103,7 +105,7 @@ export function runChecks(root, { lsRemote: ls = lsRemote, now = new Date(), ins
   else {
     const as = owner ?? slug?.owner;
     const fix = slug && as ? `git remote set-url origin https://${as}@github.com/${slug.owner}/${slug.repo}.git` : null;
-    add('remote_https', 'WARN', { key: 'remote_https.warn', vars: { url } }, fix ? { who: 'owner', key: 'remote_https.next', vars: { cmds: cmds([fix]) } } : nameOwner);
+    add('remote_https', 'WARN', { key: 'remote_https.warn', vars: { url } }, fix ? { who: 'owner', key: 'remote_https.next', vars: { cmds: cmds(root, [fix]) } } : nameOwner);
   }
 
   // reachable (stored credentials only)
@@ -111,7 +113,7 @@ export function runChecks(root, { lsRemote: ls = lsRemote, now = new Date(), ins
   if (!url) later('reachable');
   else if (reach.ok) add('reachable', 'PASS', { key: 'reachable.ok', vars: { ms: reach.ms } });
   else if (!owner) add('reachable', 'FAIL', { key: 'reachable.fail' }, nameOwner);
-  else add('reachable', 'FAIL', { key: 'reachable.fail' }, { who: 'owner', key: 'reachable.next', vars: { owner, cmds: cmds([forceAccountCommand(owner, url, folder)]) } });
+  else add('reachable', 'FAIL', { key: 'reachable.fail' }, { who: 'owner', key: 'reachable.next', vars: { owner, cmds: cmds(root, [forceAccountCommand(owner, url, folder)]) } });
 
   // plugin_active
   let events = [];
@@ -123,12 +125,12 @@ export function runChecks(root, { lsRemote: ls = lsRemote, now = new Date(), ins
   const rootShown = resolve(root).split(sep).join('/');
   if (startup) add('plugin_active', 'PASS', { key: 'plugin_active.ok', vars: { ts: startup.ts } });
   else if (where.status === 'here' || where.status === 'user') add('plugin_active', 'WARN', { key: 'plugin_active.warn' }, { who: 'owner', key: 'plugin_active.next_here', vars: { root: rootShown } });
-  else if (where.status === 'elsewhere') add('plugin_active', 'WARN', { key: 'plugin_active.warn' }, { who: 'owner', key: 'plugin_active.next_elsewhere', vars: { root: rootShown, count: where.count, cmds: cmds(installCommands(install)) } });
-  else add('plugin_active', 'WARN', { key: 'plugin_active.warn' }, { who: 'owner', key: 'plugin_active.next', vars: { root: rootShown, cmds: cmds(installCommands(install)) } });
+  else if (where.status === 'elsewhere') add('plugin_active', 'WARN', { key: 'plugin_active.warn' }, { who: 'owner', key: 'plugin_active.next_elsewhere', vars: { root: rootShown, count: where.count, cmds: cmds(root, installCommands(install)) } });
+  else add('plugin_active', 'WARN', { key: 'plugin_active.warn' }, { who: 'owner', key: 'plugin_active.next', vars: { root: rootShown, cmds: cmds(root, installCommands(install)) } });
 
   // branch_protection (Q-98): not detectable without a token. With no remote at all (ORD-0033 B.4), it says so and
   // what to do: add a remote, then run the check again; the token wording stays for a repository that has one.
-  if (!url) add('branch_protection', 'WARN', { key: 'branch_protection.no_remote' }, { who: 'owner', key: 'branch_protection.next_no_remote', vars: { cmds: cmds([`${aosCommand()} init --check`]) } });
+  if (!url) add('branch_protection', 'WARN', { key: 'branch_protection.no_remote' }, { who: 'owner', key: 'branch_protection.next_no_remote', vars: { cmds: cmds(root, [ownerCommand(root, 'init --check')]) } });
   else add('branch_protection', 'WARN', { key: 'branch_protection.warn' }, { who: 'owner', key: 'branch_protection.next' });
 
   // cloud_access (Q-92): only when cloud sessions were asked for
@@ -142,7 +144,7 @@ export function runChecks(root, { lsRemote: ls = lsRemote, now = new Date(), ins
   // move and applies it after CONFIRM.
   const claudePath = join(root, 'CLAUDE.md');
   const conflict = existsSync(claudePath) ? directorLines(readFileSync(claudePath, 'utf8')) : [];
-  if (conflict.length) add('claude_md', 'FAIL', { key: 'claude_md.fail', vars: { lines: conflict.length } }, { who: 'owner', key: 'claude_md.next', vars: { cmds: cmds([`${aosCommand()} init`]) } });
+  if (conflict.length) add('claude_md', 'FAIL', { key: 'claude_md.fail', vars: { lines: conflict.length } }, { who: 'owner', key: 'claude_md.next', vars: { cmds: cmds(root, [ownerCommand(root, 'init')]) } });
 
   // secrets_tracked (Q-101): file and line, never the value
   const tracked = isRepo ? git(root, ['ls-files', '-z']).stdout.split('\0').filter(Boolean) : [];

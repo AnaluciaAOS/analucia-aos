@@ -74,8 +74,9 @@ test('aos status --metric shows it next to the minutes and the owner steps of ea
   const lines = r.stdout.trimEnd().split('\n');
   assert.equal(lines[0], 'ORD-0001: 10 min from the decision to the first run; 0 owner step(s) in between (target 1)');
   assert.equal(lines[1], '  work recorded: 1 session(s), 1 run(s), 90 min in finished runs; tokens: not known (a hook receives no token or cost figure)');
-  assert.equal(lines[2], 'ORD-0002: no decision was recorded for this order');
-  assert.equal(lines[3], '  work recorded: 0 session(s), 0 run(s), 0 min in finished runs; tokens: not known (a hook receives no token or cost figure)');
+  assert.match(lines[2], /^ {2}measures: human touches 0 [(]target 2[)] · active minutes [0-9]/); // ORD-0046 part 6
+  assert.equal(lines[3], 'ORD-0002: no decision was recorded for this order');
+  assert.equal(lines[4], '  work recorded: 0 session(s), 0 run(s), 0 min in finished runs; tokens: not known (a hook receives no token or cost figure)');
   assert.match(lines.at(-1), /^OK: 1 of 2 order\(s\) have a recorded decision$/);
   // The detail of one order shows it too.
   assert.match(aos(root, ['status', 'ORD-0001']).stdout, /^ {2}work recorded: 1 session\(s\), 1 run\(s\), 90 min/m);

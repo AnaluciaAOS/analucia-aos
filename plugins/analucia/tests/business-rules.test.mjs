@@ -33,7 +33,7 @@ function project() {
 }
 const draft = (root, id, text) => {
   writeFileSync(join(root, '.analucia', 'drafts', `${id}.md`), text);
-  writeFileSync(join(root, '.analucia', 'drafts', `${id}.json`), verifyFile(id));
+  writeFileSync(join(root, '.analucia', 'drafts', `${id}.request.md`), '- a point of the request => the draft'), writeFileSync(join(root, '.analucia', 'drafts', `${id}.json`), verifyFile(id));
 };
 const owner = (answers) => {
   const lines = [];
