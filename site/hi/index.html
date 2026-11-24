@@ -86,28 +86,6 @@ document.addEventListener('DOMContentLoaded', function () {
     }, { rootMargin: '-45% 0px -50% 0px' });
     $('[data-nav]').forEach(function (s) { io.observe(s); });
   }
-  /* H. The loop diagram: highlight a step, filter by who acts */
-  var info = document.getElementById('flow-info');
-  var show = function (id) {
-    $('[data-step]').forEach(function (n) { n.classList.toggle('is-on', n.getAttribute('data-step') === id); });
-    var li = document.querySelector('#flow-list [data-step="' + id + '"]');
-    if (li) info.textContent = li.textContent;
-  };
-  $('.flow [data-step]').forEach(function (g) {
-    g.setAttribute('tabindex', '0'); g.setAttribute('role', 'button');
-    var id = g.getAttribute('data-step');
-    g.addEventListener('mouseenter', function () { show(id); });
-    g.addEventListener('focus', function () { show(id); });
-    g.addEventListener('click', function () { show(id); });
-  });
-  $('[data-filter]').forEach(function (b) {
-    b.hidden = false;
-    b.addEventListener('click', function () {
-      var who = b.getAttribute('data-filter');
-      $('[data-filter]').forEach(function (x) { x.setAttribute('aria-pressed', String(x === b)); });
-      $('[data-actor]').forEach(function (n) { n.classList.toggle('is-dim', who !== 'all' && n.getAttribute('data-actor') !== who); });
-    });
-  });
 });
 </script>
 </head>
@@ -181,60 +159,56 @@ document.addEventListener('DOMContentLoaded', function () {
         <li><p class="k">चरण 1</p><h3><button class="step-toggle" type="button" aria-controls="ex-1" aria-expanded="true">इरादा</button></h3><p>आप अपने शब्दों में बताते हैं कि आप क्या चाहते हैं।</p><p class="example" id="ex-1">उदाहरण के लिए, आप लिखते हैं “एक संपर्क पेज जोड़ो”। अभी आपसे और कुछ नहीं चाहिए।</p></li>
         <li><p class="k">चरण 2</p><h3><button class="step-toggle" type="button" aria-controls="ex-2" aria-expanded="true">ऑर्डर</button></h3><p>डायरेक्टर एक बजट के साथ एक छोटा, सीमित ऑर्डर लिखता है।</p><p class="example" id="ex-2">ऑर्डर में मिनटों और प्रयासों में उसका बजट, उसका जोखिम स्तर और वे जाँचें लिखी होती हैं जो साबित करेंगी कि काम पूरा हुआ।</p></li>
         <li><p class="k">चरण 3</p><h3><button class="step-toggle" type="button" aria-controls="ex-3" aria-expanded="true">निर्माण</button></h3><p>एक्ज़ीक्यूटर उस ऑर्डर की सीमाओं के भीतर काम करता है।</p><p class="example" id="ex-3">अगर एजेंट किसी ऑर्डर या उसकी जाँचों को बदलने की कोशिश करता है, तो टूल बदलाव होने से पहले ही उसे रोक देता है, बशर्ते प्लगइन प्रोजेक्ट फ़ोल्डर में सक्रिय हो।</p></li>
-        <li><p class="k">चरण 4</p><h3><button class="step-toggle" type="button" aria-controls="ex-4" aria-expanded="true">जाँच</button></h3><p>स्वचालित जाँचें चलती हैं। कोई भी अपने काम को खुद नंबर नहीं देता।</p><p class="example" id="ex-4">जाँचें डायरेक्टर ने लिखी हैं, एजेंट ने नहीं; ऊँचे जोखिम वाला ऑर्डर उन्हें दो बार चलाता है।</p></li>
+        <li><p class="k">चरण 4</p><h3><button class="step-toggle" type="button" aria-controls="ex-4" aria-expanded="true">जाँच</button></h3><p>स्वचालित जाँचें चलती हैं। कोई भी अपने काम को खुद नंबर नहीं देता।</p><p class="example" id="ex-4">जाँचें डायरेक्टर ने लिखी हैं, एजेंट ने नहीं; ऊँचे जोखिम वाला ऑर्डर हर जाँच को एक बार चलाता है और दोबारा केवल वही जाँच चलाता है जो विफल हुई।</p></li>
         <li><p class="k">चरण 5</p><h3><button class="step-toggle" type="button" aria-controls="ex-5" aria-expanded="true">सबूत</button></h3><p>नतीजे फ़ाइलों के रूप में सहेजे जाते हैं, जिन्हें आप खोल सकते हैं।</p><p class="example" id="ex-5">रिपोर्ट हर जाँच का मूल आउटपुट, उसके अपने ऑर्डर के साथ रखती है।</p></li>
-        <li><p class="k">चरण 6</p><h3><button class="step-toggle" type="button" aria-controls="ex-6" aria-expanded="true">आपके हस्ताक्षर</button></h3><p>आप इसे बंद करते हैं, या एक नोट के साथ वापस भेजते हैं।</p><p class="example" id="ex-6">पास हुए काम के लिए आप CLOSE टाइप करते हैं, या किसी दस्तावेज़ पर टिप्पणी करते हैं; आपका नोट एजेंट तक पहुँचता है।</p></li>
+        <li><p class="k">चरण 6</p><h3><button class="step-toggle" type="button" aria-controls="ex-6" aria-expanded="true">आपके हस्ताक्षर</button></h3><p>आप इसे बंद करते हैं, या एक नोट के साथ वापस भेजते हैं।</p><p class="example" id="ex-6">पास हुए काम को बंद करने के लिए आप CLOSE टाइप करते हैं, और हस्ताक्षरित काम को मुख्य ब्रांच में ले जाने के लिए MERGE, दोनों FIRMAR में; मसौदा ऑर्डर उसी विंडो में PLACE से रखा जाता है। या किसी दस्तावेज़ पर टिप्पणी करते हैं; आपका नोट एजेंट तक पहुँचता है।</p></li>
       </ol>
       <p class="band"><strong>छेड़छाड़ पकड़ने वाला लॉग।</strong>हर चरण एक-दूसरे से जुड़े रिकॉर्ड में लिखा जाता है। अगर कोई पिछली बातें बदलता है, तो कड़ी टूट जाती है और टूल आपको बता देता है।</p>
       <ul class="cards small">
         <li class="card"><p><strong>काम रुक गया?</strong> जहाँ रुका था वहीं से आगे बढ़ें; टूल दिखाता है कि क्या अधूरा रह गया।</p></li>
-        <li class="card"><p><strong>बहुत जोखिम?</strong> ज़्यादा जोखिम वाले ऑर्डरों के लिए आपकी टाइप की हुई पुष्टि चाहिए।</p></li>
+        <li class="card"><p><strong>बहुत जोखिम?</strong> ज़्यादा जोखिम वाले ऑर्डरों के लिए आपकी टाइप की हुई पुष्टि चाहिए, और उनकी जाँच हर जाँच को एक बार चलाती है।</p></li>
         <li class="card"><p><strong>लैपटॉप खो गया?</strong> प्रोजेक्ट रिपॉज़िटरी से फिर से बन जाता है।</p></li>
+        <li class="card"><p><strong>रोकना है?</strong> केवल STOP, ALTO, DETENER या PARA वाला संदेश प्रोजेक्ट को रोक देता है। केवल आप उसे फिर शुरू कर सकते हैं।</p></li>
+        <li class="card"><p><strong>कौन निर्देशित करता है?</strong> हर प्रोजेक्ट में एक डायरेक्टर।</p></li>
+      </ul>
+
+      <h3 class="sub" id="h-launch">आपके लॉन्चर: हर एक एक क्लिक</h3>
+      <ul class="cards small launch" aria-label="आपके लॉन्चर">
+        <li class="card"><p><strong>INICIAR</strong> प्रोजेक्ट तैयार करता है; सेटअप के प्रश्न पूछता है।</p></li>
+        <li class="card"><p><strong>FIRMAR</strong> आपकी हस्ताक्षर विंडो: CLOSE, MERGE, PLACE और दस्तावेज़ों की आपकी समीक्षा।</p></li>
+        <li class="card"><p><strong>DETENER</strong> प्रोजेक्ट को तुरंत रोकता है।</p></li>
+        <li class="card"><p><strong>REANUDAR</strong> रुके हुए प्रोजेक्ट को फिर शुरू करता है।</p></li>
+        <li class="card"><p><strong>IMPORTAR</strong> आपकी भरी हुई शीट को वापस प्रोजेक्ट में लाता है।</p></li>
+        <li class="card"><p><strong>REPARAR</strong> रिकॉर्ड कभी टूट जाए तो उसे ठीक करता है।</p></li>
+        <li class="card"><p><strong>ACTUALIZAR</strong> इंस्टॉल किए प्लगइन को मौजूदा संस्करण पर अपडेट करता है; और कोई चरण नहीं।</p></li>
       </ul>
 
       <figure class="panel" aria-labelledby="flow-title">
-        <figcaption><span class="kicker" id="flow-title">एक नज़र में लूप · कौन क्या करता है</span></figcaption>
-        <div class="filters" role="group" aria-label="काम करने वाले के हिसाब से चरण दिखाएँ">
-          <button type="button" data-filter="all" aria-pressed="true" hidden>सभी</button>
-          <button type="button" data-filter="person" aria-pressed="false" hidden>व्यक्ति</button>
-          <button type="button" data-filter="auto" aria-pressed="false" hidden>स्वचालित</button>
-          <button type="button" data-filter="gate" aria-pressed="false" hidden>गेट</button>
-          <button type="button" data-filter="deliverable" aria-pressed="false" hidden>परिणाम</button>
-        </div>
+        <figcaption><span class="kicker" id="flow-title">लूप एक नज़र में · आपके दो स्पर्श</span></figcaption>
         <div class="flow-scroll">
-          <svg class="flow" viewBox="0 0 1220 300" role="img" aria-labelledby="flow-svg-t flow-svg-d" focusable="false">
-            <title id="flow-svg-t">लूप का प्रवाह</title>
-            <desc id="flow-svg-d">ऑर्डर, स्वीकृति, निर्माण, जाँच, डिलीवरी, हस्ताक्षर, और निरंतर सुधार के लिए हस्ताक्षर से ऑर्डर तक लौटती एक डैश वाली रेखा।</desc>
-            <defs><marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0 0L10 5L0 10z" class="ar"/></marker></defs>
-            <g class="edges">
-              <path d="M200 110H232"/><path d="M372 110H404"/><path d="M544 110H578"/><path d="M712 110H746"/><path d="M886 110H918"/>
-              <path class="loopback" d="M1015 152V240H128V158"/>
-            </g>
-            <g data-step="order" data-actor="person"><rect class="n person" x="56" y="70" width="144" height="80" rx="40"/><text x="128" y="104" class="t">1 · ऑर्डर</text><text x="128" y="126" class="s">आप तय करते हैं</text></g>
-            <g data-step="admit" data-actor="auto"><rect class="n auto" x="232" y="70" width="140" height="80" rx="10"/><text x="302" y="104" class="t">2 · स्वीकृति</text><text x="302" y="126" class="s">aos admit</text></g>
-            <g data-step="build" data-actor="auto"><rect class="n auto" x="404" y="70" width="140" height="80" rx="10"/><text x="474" y="104" class="t">3 · निर्माण</text><text x="474" y="126" class="s">Claude Code</text></g>
-            <g data-step="verify" data-actor="gate"><path class="n gate" d="M645 50L712 110L645 170L578 110z"/><text x="645" y="106" class="t">4 · जाँच</text><text x="645" y="126" class="s">पास या नहीं?</text></g>
-            <g data-step="deliver" data-actor="deliverable"><rect class="n deliverable" x="746" y="70" width="140" height="80" rx="10"/><text x="816" y="104" class="t">5 · डिलीवरी</text><text x="816" y="126" class="s">सबूत + सारांश</text></g>
-            <g data-step="sign" data-actor="person"><rect class="n person" x="918" y="70" width="194" height="80" rx="40"/><text x="1015" y="104" class="t">6 · हस्ताक्षर</text><text x="1015" y="126" class="s">आप CLOSE टाइप करते हैं</text></g>
-            <text x="572" y="266" class="s improve">निरंतर सुधार: जो सीखा, वह एक परिशिष्ट बनकर वापस आता है</text>
+          <svg class="loopd" id="loop-diagram" viewBox="0 0 680 400" role="img" aria-labelledby="loop-svg-t loop-svg-d" focusable="false">
+            <title id="loop-svg-t">आपके दो स्पर्श के साथ लूप</title>
+            <desc id="loop-svg-d">लूप के नियम हर चरण को चलाते हैं। आगे आने वाले ऑर्केस्ट्रेटर के भीतर: डायरेक्टर का ऑर्डर, एजेंट का रन, aos verify से जाँच, और CLOSE तथा MERGE से हस्ताक्षर। पहला स्पर्श: आप माँगते हैं। दूसरा स्पर्श: आप हस्ताक्षर करते हैं। अवलोकन हर विफलता को जाँच या नियम बना देते हैं। हर ऑर्डर के मेट्रिक्स आगे आएँगे।</desc>
+            <defs><marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M2 1L8 5L2 9" class="ar"/></marker></defs>
+            <rect class="b rules" x="40" y="20" width="600" height="56" rx="8"/>
+            <text x="340" y="38" class="h">लूप के नियम</text><text x="340" y="58" class="s">प्लगइन, AGENTS.md, स्पेक · हर चरण को चलाते हैं</text>
+            <path class="ln" d="M340 76V94"/>
+            <rect class="b soon" x="40" y="96" width="600" height="160" rx="16"/>
+            <text x="340" y="116" class="h">ऑर्केस्ट्रेटर (आगे)</text><text x="340" y="134" class="s">हर रन नया सेशन, हर भूमिका का मॉडल, संदेश पहुँचाता है</text>
+            <rect class="b step" x="60" y="152" width="125" height="56" rx="8"/><text x="122" y="170" class="h">ऑर्डर</text><text x="122" y="190" class="s">डायरेक्टर</text>
+            <rect class="b step" x="205" y="152" width="125" height="56" rx="8"/><text x="267" y="170" class="h">रन</text><text x="267" y="190" class="s">एजेंट</text>
+            <rect class="b step" x="350" y="152" width="125" height="56" rx="8"/><text x="412" y="170" class="h">जाँच</text><text x="412" y="190" class="s">aos verify</text>
+            <rect class="b touch" x="495" y="152" width="125" height="56" rx="8"/><text x="557" y="170" class="h">हस्ताक्षर</text><text x="557" y="190" class="s">CLOSE और MERGE</text>
+            <path class="ln" d="M185 180H203"/><path class="ln" d="M330 180H348"/><path class="ln" d="M475 180H493"/>
+            <text x="122" y="232" class="s tt">स्पर्श 1: आप माँगते हैं</text><text x="557" y="232" class="s tt">स्पर्श 2: आप हस्ताक्षर करते हैं</text>
+            <rect class="b obs" x="40" y="276" width="280" height="56" rx="8"/><text x="180" y="294" class="h">अवलोकन</text><text x="180" y="314" class="s">↻ हर विफलता जाँच या नियम बनती है</text>
+            <rect class="b soon" x="360" y="276" width="280" height="56" rx="8"/><text x="500" y="294" class="h">हर ऑर्डर के मेट्रिक्स (आगे)</text><text x="500" y="314" class="s">स्पर्श, सक्रिय समय, लागत</text>
           </svg>
         </div>
         <ul class="legend" aria-label="संकेत">
-          <li><i class="sw person"></i>व्यक्ति (फ़ैसला और हस्ताक्षर)</li>
-          <li><i class="sw auto"></i>स्वचालित (aos)</li>
-          <li><i class="sw gate"></i>गेट (पास / पास नहीं)</li>
-          <li><i class="sw deliverable"></i>परिणाम</li>
-          <li><i class="sw improve"></i>निरंतर सुधार</li>
+          <li><i class="sw touch"></i>आपका स्पर्श</li>
+          <li><i class="sw soon"></i>आगे आने वाला, अभी उपलब्ध नहीं</li>
         </ul>
-        <p class="flow-info" id="flow-info" aria-live="polite">किसी चरण पर पॉइंटर ले जाएँ या टैप करें, और देखें कि क्या होता है और कौन करता है।</p>
-        <ol class="flow-list" id="flow-list">
-          <li data-step="order" data-actor="person"><strong>ऑर्डर</strong> — आप तय करते हैं कि आपको क्या चाहिए; डायरेक्टर उसे लिख लेता है। <em>कौन करता है: आप।</em></li>
-          <li data-step="admit" data-actor="auto"><strong>स्वीकृति</strong> — aos admit ऑर्डर दर्ज करता है और उसे कतार में रखता है। <em>कौन करता है: टूल।</em></li>
-          <li data-step="build" data-actor="auto"><strong>निर्माण</strong> — कोडिंग एजेंट ऑर्डर की सीमाओं के भीतर काम करता है। <em>कौन करता है: एजेंट।</em></li>
-          <li data-step="verify" data-actor="gate"><strong>जाँच</strong> — जाँचें चलती हैं; काम पास होता है या वापस जाता है। <em>कौन करता है: टूल, एक गेट की तरह।</em></li>
-          <li data-step="deliver" data-actor="deliverable"><strong>डिलीवरी</strong> — सबूत और एक सारांश आपके लिए सहेजे जाते हैं। <em>नतीजा: फ़ाइलें, जिन्हें आप खोल सकते हैं।</em></li>
-          <li data-step="sign" data-actor="person"><strong>हस्ताक्षर</strong> — आप इसे बंद करते हैं, या एक नोट के साथ वापस भेजते हैं। <em>कौन करता है: आप।</em></li>
-        </ol>
       </figure>
     </div>
   </section>
@@ -290,6 +264,20 @@ Document: Hosting options for the new app (order ORD-0018)
         </div>
       </figure>
       <p class="note"><span>उदाहरण के लिए स्क्रीन · उदाहरण ऑर्डर</span></p>
+    </div>
+  </section>
+
+  <section class="view" id="next" data-status="not-available" aria-labelledby="h-next">
+    <div class="wrap">
+      <p class="tag">आगे आने वाला</p>
+      <h2 id="h-next">आगे आने वाला: <em>ऑर्केस्ट्रेटर।</em></h2>
+      <p class="lead">अभी उपलब्ध नहीं है। लूप इसी ओर बढ़ रहा है।</p>
+      <ul class="cards small">
+        <li class="card"><p><strong>हर रन के लिए नया सेशन।</strong> हर रन साफ़ शुरुआत से होता है।</p></li>
+        <li class="card"><p><strong>हर भूमिका के लिए एक मॉडल।</strong> डायरेक्टर और एजेंट को अपनी-अपनी ज़रूरत का मिलता है।</p></li>
+        <li class="card"><p><strong>यह संदेश पहुँचाता है।</strong> डायरेक्टर और एजेंट के बीच, ताकि आप केवल माँगें और हस्ताक्षर करें।</p></li>
+      </ul>
+      <p class="band"><strong>अभी उपलब्ध नहीं।</strong>इस भाग में कुछ भी आज काम नहीं करता।</p>
     </div>
   </section>
 

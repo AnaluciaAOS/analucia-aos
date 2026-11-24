@@ -12,6 +12,7 @@
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
+import { loadDenylist } from '../plugins/analucia/lib/denylist.mjs';
 
 function fail(message) {
   process.stderr.write(`release-guard: ${message} (fail closed)\n`);
@@ -22,19 +23,10 @@ const denylistPath = process.argv[2];
 if (!denylistPath) fail('no denylist path given');
 if (!existsSync(denylistPath) || !statSync(denylistPath).isFile()) fail(`denylist not found: ${denylistPath}`);
 
-const escape = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-const rules = [];
-readFileSync(denylistPath, 'utf8').split(/\r?\n/).forEach((raw, i) => {
-  const line = raw.trim();
-  if (!line || line.startsWith('#')) return;
-  const whole = line.toLowerCase().startsWith('w:');
-  const term = whole ? line.slice(2).trim() : line;
-  if (!term) return;
-  const body = escape(term);
-  const pattern = whole ? `(?<![\\p{L}\\p{N}_])${body}(?![\\p{L}\\p{N}_])` : body;
-  rules.push({ id: rules.length + 1, line: i + 1, re: new RegExp(pattern, 'iu') });
-});
-if (rules.length === 0) fail(`denylist has no terms: ${denylistPath}`);
+// One matcher for the whole project: the plugin's (AMD-0026 section 1).
+const loaded = loadDenylist(denylistPath);
+if (loaded.error) fail(`${loaded.error}: ${denylistPath}`);
+const rules = loaded.rules;
 
 let root;
 let files;

@@ -56,7 +56,7 @@ test('an SSH remote gives WARN remote_https, with the HTTPS command', () => {
   const root = repo({ url: 'git@github.com:example/demo.git' });
   const r = byName(runChecks(root, { lsRemote: reachable }).results);
   assert.equal(r.remote_https.status, 'WARN');
-  assert.match(reportText(Object.values(r)), /remote_https: origin does not use HTTPS \(git@github\.com:example\/demo\.git\)\n {2}next \(owner\): Run in this folder \(SSH needs keys that most owners do not have\):\n {6}git remote set-url origin https:\/\/example@github\.com\/example\/demo\.git\n/);
+  assert.match(reportText(Object.values(r)), /remote_https: origin does not use HTTPS \(git@github\.com:example\/demo\.git\)\n {2}next \(owner\): Run in this folder \(SSH needs keys that most owners do not have\):\n {6}It goes in the terminal of the project [^\n]+:\n {6}git remote set-url origin https:\/\/example@github\.com\/example\/demo\.git\n/);
 });
 
 test('a credential username different from github_owner gives FAIL account, with the one command that binds it', () => {
@@ -67,7 +67,7 @@ test('a credential username different from github_owner gives FAIL account, with
   assert.equal(r.account.status, 'FAIL');
   const text = reportText(results);
   assert.match(text, /FAIL account: remote user example, credential user someone-else, github_owner example/);
-  assert.match(text, /next \(owner\): Run in this folder:\n {6}git config credential\.https:\/\/github\.com\.username example\n(?! {6})/);
+  assert.match(text, /next \(owner\): Run in this folder:\n {6}It goes in the terminal of the project [^\n]+:\n {6}git config credential\.https:\/\/github\.com\.username example\n(?! {6})/);
 });
 
 test('a tracked fake secret built at run time gives FAIL secrets_tracked, and the value is never printed', () => {
@@ -114,7 +114,7 @@ test('no role.declared with source startup gives WARN plugin_active, with the HT
   // ORD-0029 A: installed with project scope for another folder (for example the outer folder of a nested copy).
   const elsewhere = reportText(runChecks(root, { lsRemote: reachable, install: { entries: [{ scope: 'project', projectPath: join(root, '..') }], marketplaceKnown: true } }).results);
   // ORD-0033 B.1: a count, never the other folder's path.
-  assert.match(elsewhere, /installed for another folder \(1 in all\), not for this one, and Claude Code loads it only there[^\n]*\n {6}claude plugin install analucia@analucia-aos --scope project/);
+  assert.match(elsewhere, /installed for another folder \(1 in all\), not for this one, and Claude Code loads it only there[^\n]*\n {6}It goes in the terminal of the project [^\n]+:\n {6}claude plugin install analucia@analucia-aos --scope project/);
   assert.ok(!elsewhere.includes(`(${resolve(root, '..').split('\\').join('/')})`), 'the other folder is not printed (this folder, which contains its path, is)');
 });
 
@@ -145,7 +145,7 @@ test('aos init --check: exit 0 with only WARN, exit 1 with a FAIL; the report fo
   git(root, 'push', '-q', '--no-verify', 'origin', 'main');
   const ok = aos(root, ['init', '--check']);
   assert.equal(ok.status, 0, ok.stdout + ok.stderr);
-  assert.match(ok.stdout, /^Comprobaciones del arranque/);
+  assert.match(ok.stdout, /^Proyecto: [^\n]+\nComprobaciones del arranque/);
   assert.match(ok.stdout, /PASS reachable: git ls-remote origin respondió en \d+ ms/);
   assert.match(ok.stdout, /WARN branch_protection/);
   assert.match(ok.stdout, /Informe guardado en \.analucia\/views\/onboarding\.md\./);

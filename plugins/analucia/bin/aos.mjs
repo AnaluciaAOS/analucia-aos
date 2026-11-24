@@ -13,7 +13,7 @@
 //   aos close ORD-NNNN --as director    risk: low only, no TTY (SPEC-0003 §4)
 //   aos init [--locale] [--answers <file> [--dry-run]]   guided onboarding (owner TTY + CONFIRM to apply)
 //   aos init --hosting <answer> [--dry-run]              change only the hosting answer (AMD-0006 §5)
-//   aos permissions write [--local]     .claude/settings.json (or, with --local, .claude/settings.local.json): permission profile (+ plugin enabled for this repo) (SPEC-0004 §3, §7)
+//   aos permissions write [--local] [--permissions-only]     .claude/settings.json (or, with --local, .claude/settings.local.json): permission profile (+ plugin enabled for this repo) (SPEC-0004 §3, §7)
 //   aos role declare director --scope "<paths>"   role.declared with the write scope (SPEC-0004 §6)
 //   aos ask open ASK-NNNN               director: record.created + ask.opened for a locked ask file
 //   aos ceo export [--out <path>] [--locale en|es] | aos ceo import <path>   the owner sheet (import: owner TTY + CONFIRM)
@@ -41,7 +41,7 @@ import {
 import { ALERT_NEXT, alertLine, costRecord, costSummary, currentMonth, readProject, statusLines } from '../lib/cost.mjs';
 import { admit, close, pauseOrder, requirePreflight, resumeOrder, runFinish, runStart, runTake, verify } from '../lib/lifecycle.mjs';
 import { handoffRel, writeHandoff } from '../lib/handoff.mjs';
-import { permissionsWrite } from '../lib/permissions.mjs';
+import { permissionsApply, permissionsWrite } from '../lib/permissions.mjs';
 import { LOCALES, catalog, onboardingCompleted, onboardingStarted, runInit } from '../lib/onboarding.mjs';
 import { wizard } from '../lib/wizard.mjs';
 import { requestReview } from '../lib/review.mjs';
@@ -54,13 +54,19 @@ import { evalsReport, runEvals } from '../lib/evals.mjs';
 import { adopt, needsAudit } from '../lib/adopt.mjs';
 import { firstHour, firstHourText, writeFirstHourView } from '../lib/metrics.mjs';
 import { installLauncher, sign } from '../lib/sign.mjs';
-import { DRAFTS_REL, listDrafts, nextOrderId } from '../lib/drafts.mjs';
+import { DRAFTS_REL, isTopicDraft, listDrafts, nextOrderId } from '../lib/drafts.mjs';
+import { buildQueue } from '../lib/queue.mjs';
+import { tryDraft, tryLines } from '../lib/drafts-try.mjs';
 import { LAUNCHER_NAMES, installLaunchers } from '../lib/launchers.mjs';
 import { nextLine } from '../lib/next.mjs';
 import { idsMap } from '../lib/ids.mjs';
 import { okLine } from '../lib/ok-line.mjs';
 import { repairLog } from '../lib/log-repair.mjs';
 import { replacedCheck } from '../lib/replaces.mjs';
+import { ownerStatusText } from '../lib/owner-status.mjs';
+import { dispatch, planNext, proposalFor } from '../lib/dispatch.mjs';
+import { costLines, costSessions } from '../lib/session-cost.mjs';
+import { TOUCH_TARGET, activeMinutesOf, costByModelOf, touchesOf } from '../lib/measures.mjs';
 import { TERMINAL, chainOf, consumptionOf, metricOf, span, stagesOf, statusOf, waiversOf } from '../lib/status.mjs';
 import { RuleError, replay } from '../lib/state.mjs';
 import { waitingLine } from '../lib/waiting.mjs';
@@ -76,6 +82,14 @@ import { missingLine, reportCheck, reportTemplate } from '../lib/report.mjs';
 import { tracked, trackedLine } from '../lib/tracked.mjs';
 import { handleOwnerWord, ownerWord } from '../lib/owner-words.mjs';
 import { personLocale, supportedLocale } from '../lib/locale.mjs';
+import { liveCheck } from '../lib/live-check.mjs';
+import { smokeCheck } from '../lib/smoke-check.mjs';
+import { testsRun } from '../lib/flaky.mjs';
+import { testsBaseline, testsCompare } from '../lib/not-worse.mjs';
+import { textCheck } from '../lib/text-check.mjs';
+import { sqlSplit } from '../lib/sql-split.mjs';
+import { isOwnerCommand, whereCheck } from '../lib/where.mjs';
+import { directorStatusLines } from '../lib/director-status.mjs';
 import { formatError, isWarning, validateFile, validateTree } from '../lib/validate.mjs';
 
 const USAGE = [
@@ -93,7 +107,7 @@ const USAGE = [
   '       aos preflight <order ID>',
   '       aos ask open ASK-NNNN',
   '       aos role declare <role> [--scope "<paths>"]',
-  '       aos permissions write [--local]',
+  '       aos permissions write [--local] | aos permissions apply',
   '       aos init [--locale en|pt|zh-Hans|hi|es] [--answers <file.json> [--dry-run]] | aos init --hosting managed|own-server|"already: <where>"|later [--dry-run] | aos init --check',
   '       aos ceo export [--out <path>] [--locale en|es]',
   '       aos ceo import <path>',
@@ -101,8 +115,9 @@ const USAGE = [
   '       aos cost status [--month YYYY-MM]',
   '       aos halt --reason "<text>" | aos resume',
   '       aos repair-log',
-  '       aos status [<order ID> [--chain [--json]]] | aos status --metric',
-  '       aos decision record --text "<one line>" [--source <file>] --order <ID> [--order <ID> …]',
+  '       aos status [<order ID> [--chain [--json]]] | aos status --metric | aos status --owner | aos status --director',
+  '       aos decision record --text "<one line>" [--source <file>] --order <ID> [--order <ID> …]   (or --draft <topic> for a draft with no number yet)',
+  '       aos queue set <order ID> <order ID> … | aos queue show   (director: the order in which the queued orders run)',
   '       aos check-writeback',
   '       aos hook session-start|session-end|pre-tool-use   (hook JSON on stdin)',
   '       aos agents-md sync | aos check-roles',
@@ -116,22 +131,28 @@ const USAGE = [
   '       aos resume-order ORD-NNNN --reason "<why the block has ended>" | aos unblock ORD-NNNN --reason "…"   (leaves "blocked" on a written reason)',
   '       aos sign | aos sign --install-launcher',
   '       aos next',
+  '       aos dispatch [--dry-run] [--brief]   (places the drafts the owner decided, verifies, and works out the next run: its name, model, effort and brief)',
   '       aos launchers install',
   '       aos update',
   '       aos scratch add <order ID> --path <folder> [--pid <n>] | aos scratch check <order ID>',
-  '       aos drafts',
+  '       aos drafts [--try <draft>]',
   '       aos ids',
   '       aos docs check <order ID>',
   '       aos replaced check <order ID>',
   '       aos trailer check <order ID> --from <commit>',
   '       aos report template <order ID> | aos report check <order ID>',
   '       aos tracked <path> [<path> …]',
+  '       aos live check <url> --expect "<text or /pattern/>" [--total <n> --base <n>] [--placeholder-ok]',
+  '       aos smoke check <order ID>',
+  '       aos sql split <file> [--dry-run]',
+  '       aos tests baseline <order ID> | aos tests compare <order ID> | aos tests run <order ID>',
+  '       aos text has|lacks <file> "<text>" [-i]',
   '       aos explain <CODE>',
   '       (every command accepts --root <dir>)',
 ].join('\n');
 
 // Flags that take no value.
-const BOOLEAN_FLAGS = new Set(['dry-run', 'check', 'no-audit', 'install-launcher', 'restore-hint', 'chain', 'json', 'metric', 'detail', 'local']);
+const BOOLEAN_FLAGS = new Set(['dry-run', 'check', 'no-audit', 'install-launcher', 'restore-hint', 'chain', 'json', 'metric', 'detail', 'local', 'permissions-only', 'owner', 'brief', 'placeholder-ok', 'director', 'no-run']);
 // Flags that may be given several times (aos decision record --order A --order B): kept as a list in opts.<key>s.
 const REPEATED_FLAGS = new Set(['order']);
 
@@ -562,14 +583,25 @@ function cmdCheckPush({ positional }, root) {
   }
 }
 
-function cmdPermissions({ positional, opts }, root) {
+async function cmdPermissions({ positional, opts }, root) {
+  // ORD-0046 part 4: the owner's button PERMISOS (owner only, a typed word).
+  if (positional[0] === 'apply') {
+    try {
+      const t = catalog(ownerLocale(root));
+      const r = await permissionsApply(root, { isTTY: process.stdin.isTTY === true, ask: askLine, out: (l) => process.stdout.write(`${l}\n`), t });
+      sayOk(root, 'permissions_apply', { n: r.written.length });
+      return 0;
+    } catch (x) {
+      return refuse('permissions apply', x);
+    }
+  }
   if (positional[0] !== 'write') {
-    process.stderr.write('usage: aos permissions write [--local]\n');
+    process.stderr.write('usage: aos permissions write [--local] | aos permissions apply\n');
     return 2;
   }
   try {
     const local = Boolean(opts.local);
-    const r = permissionsWrite(root, { local });
+    const r = permissionsWrite(root, { local, ...(opts["permissions-only"] ? { marketplace: null } : {}) });
     process.stdout.write(`${r.path} ${r.changed ? 'written' : 'unchanged'} (allow/ask/deny profile${r.marketplace ? `; plugin ${r.marketplace.plugin}@${r.marketplace.name} enabled from github ${r.marketplace.repo}` : ''})${local ? '' : '; .claude/settings.local.json untouched'}\n`);
     sayOk(root, 'permissions', { path: r.path });
     return 0;
@@ -672,6 +704,12 @@ function cmdCost({ opts, positional }, root) {
       for (const t of r.fired) process.stdout.write(`${alertLine(t, r.summary)}\n${ALERT_NEXT}\n`);
       return 0;
     }
+    if (sub === 'sessions') {
+      // ORD-0047 part 17 (OBS-215): the tokens of an order, from this project's own session records (usage fields only).
+      if (!positional[1]) { process.stderr.write('usage: aos cost sessions <order ID>\n'); return 2; }
+      for (const l of costLines(positional[1], costSessions(root, readLog(root).events, positional[1]))) process.stdout.write(`${l}\n`);
+      return 0;
+    }
     if (sub === 'status') {
       const month = opts.month ?? currentMonth(new Date(), root);
       const s = costSummary(readLog(root).events, readProject(root), month);
@@ -681,7 +719,7 @@ function cmdCost({ opts, positional }, root) {
   } catch (x) {
     return refuse(`cost ${sub}`, x);
   }
-  process.stderr.write('usage: aos cost record --usd <n> --source "<text>" [--order ORD-NNNN] [--month YYYY-MM] | aos cost status [--month YYYY-MM]\n');
+  process.stderr.write('usage: aos cost record --usd <n> --source "<text>" [--order ORD-NNNN] [--month YYYY-MM] | aos cost status [--month YYYY-MM] | aos cost sessions <order ID>\n');
   return 2;
 }
 
@@ -907,6 +945,10 @@ async function cmdSign({ opts }, root) {
     const r = await sign(root, { isTTY: process.stdin.isTTY === true, ask, out });
     if (r.signed?.length || r.placed?.length || r.reviewed?.length) sayOk(root, 'sign', { signed: r.signed?.length ? r.signed.join(', ') : '0', placed: r.placed?.length ?? 0, reviewed: r.reviewed?.length ?? 0 });
     else sayOk(root, 'sign_none');
+    // ORD-0046 part 5 (AMD-0027): after FIRMAR places or signs, it says what the dispatcher decided, in one line.
+    if (r.placed?.length || r.signed?.length) {
+      try { process.stdout.write(`${dispatchLines(dispatch(root), catalog(ownerLocale(root))).at(-1)}\n`); } catch { /* the line is a help, never a condition of the signature */ }
+    }
     return 0;
   } catch (x) {
     return refuse('sign', x);
@@ -1036,6 +1078,40 @@ function cmdUpdate(_args, root) {
   return 0;
 }
 
+// aos dispatch (ORD-0046 part 5, option B): the dispatcher places the drafts the owner already decided, verifies the
+// delivered orders and works out the next run. It opens nothing: --brief prints what the new-session card needs.
+// dispatchLines is what it says in the owner's words (FIRMAR prints its last line).
+export function dispatchLines(r, t) {
+  const lines = [];
+  for (const d of r.did) {
+    if (d.verified) lines.push(t('dispatch.verified', { id: d.verified }));
+    else if (d.placed) lines.push(t('dispatch.placed', { ids: d.placed.join(', ') }));
+  }
+  if (r.next) lines.push(t(r.next.take ? 'dispatch.next_take' : 'dispatch.next', { name: r.next.name, model: r.next.model, effort: r.next.effort }));
+  else lines.push(t(`dispatch.stop.${r.stopped}`, { pid: r.pid ?? '' }));
+  return lines;
+}
+
+function cmdDispatch({ opts }, root) {
+  const t = catalog(ownerLocale(root));
+  let r;
+  try {
+    if (opts.brief === true) {
+      const plan = planNext(root);
+      if (plan.action !== 'session') { process.stdout.write(`${t(`dispatch.stop.${plan.action}`, { pid: '' })}\n`); return 0; }
+      const p = proposalFor(root, plan);
+      process.stdout.write(`name: ${p.name}\nmodel: ${p.model}\neffort: ${p.effort}\n\n${p.brief}\n`);
+      return 0;
+    }
+    r = dispatch(root, { dryRun: opts['dry-run'] === true });
+  } catch (x) {
+    return refuse('dispatch', x);
+  }
+  for (const l of dispatchLines(r, t)) process.stdout.write(`${l}\n`);
+  sayOk(root, 'dispatch', {});
+  return r.stopped === 'busy' ? 1 : 0;
+}
+
 // aos launchers install (ORD-0040 part 4): any role, an agent included. It writes files only; each launcher opens a
 // real console where only a person can answer, so E_OWNER_TTY stays on every owner-only command.
 function cmdLaunchers({ positional }, root) {
@@ -1052,7 +1128,17 @@ function cmdLaunchers({ positional }, root) {
 
 // aos drafts (ORD-0040 part 2): the drafts waiting and whether each can be placed. Read-only, any role.
 // Exit 0 when every draft is ready (or there is none), 1 when at least one is not.
-function cmdDrafts(_args, root) {
+function cmdDrafts({ opts }, root) {
+  // ORD-0047 part 12 (OBS-189): `aos drafts --try <draft>` tries each check of the draft's verify file before it is placed.
+  if (opts.try !== undefined) {
+    if (opts.try === true || !String(opts.try).trim()) {
+      process.stderr.write('usage: aos drafts --try <draft topic or ID> [--no-run]\n');
+      return 2;
+    }
+    const r = tryDraft(root, opts.try, { run: opts['no-run'] !== true });
+    for (const l of tryLines(r)) (r.draft ? process.stdout : process.stderr).write(`${l}\n`);
+    return r.ok ? 0 : 1;
+  }
   const t = catalog(ownerLocale(root));
   const drafts = listDrafts(root);
   if (!drafts.length) {
@@ -1061,10 +1147,40 @@ function cmdDrafts(_args, root) {
   }
   for (const d of drafts) {
     process.stdout.write(`${d.ok ? t('drafts.ready', { id: d.id, title: d.title }) : t('drafts.not_ready', { id: d.id })}\n`);
+    if (d.ok && d.would_get) process.stdout.write(`${t('drafts.would_get', { would: d.would_get })}\n`);
     for (const p of d.problems) process.stdout.write(`    - ${p}\n`);
+    for (const w of d.warnings ?? []) process.stdout.write(`${t('drafts.warning', { warning: w })}\n`);
   }
   process.stdout.write(`${t('drafts.footer', { id: nextOrderId(root) })}\n`);
   return drafts.every((d) => d.ok) ? 0 : 1;
+}
+
+// aos queue set <ID> <ID> … (ORD-0047 part 9, OBS-211): the director sets the order in which the queued orders run; it is
+// recorded with the existing event operation.logged. `aos next`, the dispatcher, `aos status` and ESTADO follow it.
+// aos queue show prints the order they follow now.
+function cmdQueue({ positional }, root) {
+  const t = catalog(ownerLocale(root));
+  const sub = positional[0];
+  if (sub !== 'set' && sub !== 'show') {
+    process.stderr.write('usage: aos queue set <order ID> <order ID> …   |   aos queue show\n');
+    return 2;
+  }
+  try {
+    const orders = replay(readLog(root).events).orders;
+    if (sub === 'set') {
+      const ids = positional.slice(1);
+      const bad = ids.find((id) => !orders[id] || ['closed', 'rejected', 'superseded', 'cancelled'].includes(orders[id].state));
+      if (!ids.length || bad || new Set(ids).size !== ids.length) {
+        throw Object.assign(new Error(!ids.length ? 'aos queue set needs at least one order ID' : bad ? `${bad} is not an open order of this project` : 'an order ID is listed twice'), { code: 'E_NO_ORDER' });
+      }
+      appendEvent(root, { type: 'operation.logged', actor: 'director', subject: null, payload: { operation: 'queue.set', ids }, agent: parseAgent({}) });
+      process.stdout.write(`${t('queue.set', { ids: ids.join(' → ') })}\n`);
+    }
+    for (const [i, q] of buildQueue(root, orders).entries()) process.stdout.write(`${i + 1}. ${q.id} — ${q.state}${q.title ? ` — ${q.title}` : ''}\n`);
+    return 0;
+  } catch (x) {
+    return refuse('queue', x);
+  }
 }
 
 // aos ids (ORD-0041 part 1): the map for people. Each existing record with its ID and the same number under the
@@ -1147,8 +1263,23 @@ async function cmdRepairLog(_args, root) {
 // carry out. (The owner's own placement records it by itself when the draft carries the key `decision:`.)
 function cmdDecision({ opts, positional }, root) {
   const ids = opts.orders ?? [];
+  // ORD-0047 part 9 (AMD-0029 item 5): the decision for a draft that has no number yet, by its topic.
+  if (positional[0] === 'record' && opts.draft && opts.text && String(opts.text).trim() && !ids.length) {
+    const topic = String(opts.draft).replace(/^draft-/, '');
+    if (!isTopicDraft(`draft-${topic}`)) {
+      process.stderr.write(`aos decision record: "${topic}" is not a topic: lowercase letters, digits and dashes\n`);
+      return 2;
+    }
+    try {
+      const { line } = appendEvent(root, { type: 'operation.logged', actor: 'director', subject: null, payload: { operation: 'draft.decision', draft: topic, text: String(opts.text).trim(), source: opts.source ?? null }, agent: parseAgent({}) });
+      process.stdout.write(`decision recorded for the draft ${topic}; it is linked to its ID when it is placed (${LOG_REL}:${line})\n`);
+      return 0;
+    } catch (x) {
+      return refuse('decision record', x);
+    }
+  }
   if (positional[0] !== 'record' || !opts.text || !String(opts.text).trim() || !ids.length) {
-    process.stderr.write('usage: aos decision record --text "<one line>" [--source <file>] --order <ID> [--order <ID> …]\n');
+    process.stderr.write('usage: aos decision record --text "<one line>" [--source <file>] --order <ID> [--order <ID> …]\n       aos decision record --text "<one line>" [--source <file>] --draft <topic>\n');
     return 2;
   }
   try {
@@ -1166,6 +1297,11 @@ function cmdDecision({ opts, positional }, root) {
 // the decision to the signature, also as JSON; --metric: minutes and owner steps from the decision to the first run.
 // Read from the log only. It ends with one closing line, except --json (read by a program).
 function cmdStatus({ opts, positional }, root) {
+  // ORD-0047 part 6 (OBS-208): the state from the log plus where main and origin/main are.
+  if (opts.director === true) {
+    for (const l of directorStatusLines(root)) process.stdout.write(`${l}\n`);
+    return 0;
+  }
   const t = catalog(ownerLocale(root));
   let events;
   try {
@@ -1175,6 +1311,18 @@ function cmdStatus({ opts, positional }, root) {
   }
   const orders = replay(events).orders;
   const id = positional[0];
+  // ORD-0046 part 2: the owner's view, in plain words (ESTADO).
+  if (opts.owner === true) {
+    for (const l of ownerStatusText(root, t)) process.stdout.write(`${l}\n`);
+    sayOk(root, 'status_owner', {});
+    return 0;
+  }
+  // ORD-0046 part 6: the three measures of one order (human touches, active minutes, cost by model).
+  const measures = (o) => {
+    const touches = touchesOf(events, o);
+    const cost = costByModelOf(events, o);
+    return `  ${t('status.measures', { touches: touches ?? t('status.not_known'), target: TOUCH_TARGET, minutes: activeMinutesOf(events, o), cost: cost ? Object.entries(cost).map(([m, usd]) => `${m} $${usd}`).join(', ') : t('status.not_known') })}`;
+  };
   const stage = (state) => `${state} (${t(`queue.state.${state}`)})`;
   // ORD-0042 part 11: the work the log recorded for an order; tokens are not known to a plugin.
   const work = (o) => {
@@ -1192,13 +1340,17 @@ function cmdStatus({ opts, positional }, root) {
         have += 1;
         process.stdout.write(`${m.minutes === null ? t('status.metric_waiting', { id: o, steps: m.owner_steps, ts: m.decision }) : t('status.metric_line', { id: o, minutes: m.minutes, steps: m.owner_steps })}\n`);
       }
-      process.stdout.write(`${work(o)}\n`);
+      // ORD-0047 part 17: tokens by model from the session records (not measured before the baseline order), on the measures line.
+      const cs = costSessions(root, events, o);
+      const tokens = !cs.measured ? t('status.not_measured') : Object.keys(cs.total).length ? Object.entries(cs.total).map(([m, v]) => `${m} ${v.input + v.output + v.cache_creation + v.cache_read}`).join(', ') : t('status.not_known');
+      process.stdout.write(`${work(o)}\n${measures(o)} · ${t('status.tokens', { tokens })}\n`);
     }
     sayOk(root, 'status_metric', { have, n: ids.length });
     return 0;
   }
   if (!id) {
-    const open = statusOf(root, events).filter((s) => !TERMINAL.has(s.state));
+    const rank = new Map(buildQueue(root, orders).map((q, i) => [q.id, i])); // ORD-0047 part 9: the queue order
+    const open = statusOf(root, events).filter((s) => !TERMINAL.has(s.state)).sort((a, b) => (rank.get(a.id) ?? 1e9) - (rank.get(b.id) ?? 1e9));
     process.stdout.write(`${waitingLine(root, events, t)}\n`); // ORD-0043 part 6: who waits for whom, first
     process.stdout.write(`${t('stop.hint')}\n`); // ORD-0043 part 15: the launcher and the word
     for (const s of open) process.stdout.write(`${line(s)}\n`);
@@ -1226,7 +1378,7 @@ function cmdStatus({ opts, positional }, root) {
   else process.stdout.write(`${nextLine(root, { explicit: true })}\n`);
   const m = metricOf(events, id);
   process.stdout.write(`${!m ? t('status.metric_none', { id }) : m.minutes === null ? t('status.metric_waiting', { id, steps: m.owner_steps, ts: m.decision }) : t('status.metric_line', { id, minutes: m.minutes, steps: m.owner_steps })}\n`);
-  process.stdout.write(`${work(id)}\n`);
+  process.stdout.write(`${work(id)}\n${measures(id)}\n`);
   sayOk(root, 'status_one', { id, state: s.state });
   return 0;
 }
@@ -1332,7 +1484,104 @@ function cmdTracked({ positional }, root) {
   }
 }
 
+// aos live check <url> --expect … (ORD-0047 part 1, OBS-201): evidence on the published page for a promise of something
+// the owner will see. Exit 0 when it holds; 1 with what failed; 2 on a usage error.
+async function cmdLive({ opts, positional }) {
+  const [sub, url] = positional;
+  const number = (k) => (opts[k] === undefined ? undefined : Number(String(opts[k]).replace(/[.,](?=\d{3}\b)/g, '')));
+  if (sub !== 'check' || !url || (opts.expect === undefined && opts.total === undefined && opts.base === undefined)) {
+    process.stderr.write('usage: aos live check <url> --expect "<text or /pattern/>" [--total <n> --base <n>] [--placeholder-ok]\n');
+    return 2;
+  }
+  const r = await liveCheck({ url, expect: opts.expect, total: number('total'), base: number('base'), placeholderOk: opts['placeholder-ok'] === true });
+  for (const l of r.lines) process.stdout.write(`${l}\n`);
+  process.stdout.write(`live check: ${r.ok ? 'ok' : 'FAILED'}\n`);
+  return r.ok ? 0 : 1;
+}
+
+// aos smoke check <ID> (ORD-0047 part 2, OBS-204): a screenshot and a line per screen and button of the key `screens:`.
+function cmdSmoke({ positional }, root) {
+  if (positional[0] !== 'check' || !positional[1]) {
+    process.stderr.write('usage: aos smoke check <order ID>\n');
+    return 2;
+  }
+  const id = positional[1];
+  const r = smokeCheck(root, id);
+  if (!r.screens.length && r.ok) {
+    process.stdout.write(`smoke check: ok (${id} has no "screens" key)\n`);
+    return 0;
+  }
+  for (const p of r.problems) process.stdout.write(`  - ${p}\n`);
+  process.stdout.write(`smoke check: ${r.ok ? `ok (${r.screens.length} screen/button(s) with a screenshot and a line in smoke.md)` : `FAILED (${r.problems.length} problem(s))`}\n`);
+  return r.ok ? 0 : 1;
+}
+
+// aos tests baseline|compare <ID> (ORD-0047 part 3, OBS-205): "not worse than before".
+function cmdTests({ positional }, root) {
+  const [sub, id] = positional;
+  if (!['baseline', 'compare', 'run'].includes(sub) || !id) {
+    process.stderr.write('usage: aos tests baseline <order ID> | aos tests compare <order ID> | aos tests run <order ID>\n');
+    return 2;
+  }
+  try {
+    if (sub === 'baseline') {
+      const r = testsBaseline(root, id);
+      process.stdout.write(`tests baseline: ${r.ran} test(s) recorded in ${r.path}; ${r.failing.length} already failing\n`);
+      for (const n of r.failing) process.stdout.write(`  already failing: ${n}\n`);
+      return 0;
+    }
+    if (sub === 'run') {
+      const r = testsRun(root, id);
+      for (const n of r.failing) process.stdout.write(`  FAILING in every pass: ${n}\n`);
+      for (const n of r.accepted) process.stdout.write(`  unsteady, accepted in .analucia/flaky.txt: ${n}\n`);
+      for (const n of r.unaccepted) process.stdout.write(`  UNSTEADY (failed once, then passed)${r.without_reason.includes(n) ? ', listed in flaky.txt with no reason' : ''}: ${n}\n`);
+      process.stdout.write(`tests run: ${r.ok ? `ok (${r.ran} test(s), ${r.passes} pass(es), ${r.accepted.length} accepted unsteady)` : `FAILED (${r.failing.length} failing, ${r.unaccepted.length} unsteady not accepted)`}; recorded in ${r.path}\n`);
+      return r.ok ? 0 : 1;
+    }
+    const r = testsCompare(root, id);
+    for (const n of r.alreadyFailing) process.stdout.write(`  failed before and still listed apart: ${n}\n`);
+    for (const n of r.missing) process.stdout.write(`  passed before, not in this run: ${n}\n`);
+    for (const n of r.worse) process.stdout.write(`  WORSE: passed in the baseline, fails now: ${n}\n`);
+    process.stdout.write(`tests compare: ${r.worse.length ? `FAILED (${r.worse.length} test(s) went from passing to failing)` : `ok (${r.ran} test(s) now, ${r.was} in the baseline, none went from passing to failing)`}\n`);
+    return r.worse.length ? 1 : 0;
+  } catch (x) {
+    process.stdout.write(`tests ${sub}: ${x.message}\n`);
+    return 1;
+  }
+}
+
+// aos text has|lacks <file> "<text>" [-i] (ORD-0047 part 4, OBS-206): the text check that is safe with accents.
+function cmdText({ positional }, root) {
+  const rest = positional.filter((p) => p !== '-i');
+  const [mode, file, ...words] = rest;
+  if (!['has', 'lacks'].includes(mode) || !file || words.length !== 1) {
+    process.stderr.write('usage: aos text has|lacks <file> "<text>" [-i]\n');
+    return 2;
+  }
+  const r = textCheck(root, mode, file, words[0], { ignoreCase: positional.includes('-i') });
+  process.stdout.write(`${r.line}\n`);
+  return r.ok ? 0 : 1;
+}
+
+// aos sql split <file> [--dry-run] (ORD-0047 part 5, OBS-207): the statements of a SQL file. It only reads the file.
+function cmdSql({ positional }, root) {
+  const [sub, file] = positional;
+  if (sub !== 'split' || !file) {
+    process.stderr.write('usage: aos sql split <file> [--dry-run]\n');
+    return 2;
+  }
+  const r = sqlSplit(root, file);
+  process.stdout.write(`${r.line}\n`);
+  r.statements.forEach((s, i) => process.stdout.write(`  ${i + 1}. ${s}\n`));
+  return r.ok ? 0 : 1;
+}
+
 const commands = {
+  sql: cmdSql,
+  live: cmdLive,
+  smoke: cmdSmoke,
+  tests: cmdTests,
+  text: cmdText,
   tracked: cmdTracked,
   replaced: cmdReplaced,
   report: cmdReport,
@@ -1345,9 +1594,11 @@ const commands = {
   ids: cmdIds,
   next: cmdNext,
   launchers: cmdLaunchers,
+  dispatch: cmdDispatch,
   update: cmdUpdate,
   scratch: cmdScratch,
   drafts: cmdDrafts,
+  queue: cmdQueue,
   backup: cmdBackup,
   review: cmdReview,
   workflow: cmdWorkflow,
@@ -1381,5 +1632,17 @@ try {
 } catch (x) {
   process.stderr.write(`aos: ${x.message}\n`);
   process.exit(2);
+}
+// ORD-0047 part 8 (OBS-210): an owner command prints the project it runs in and stops in the wrong place, before any change.
+{
+  const where = parsed.opts.root ?? '.';
+  if ((isOwnerCommand(cmd, parsed.positional) && !parsed.opts['install-launcher']) || (parsed.opts.project && cmd !== 'update')) {
+    const w = whereCheck(where, { command: cmd, project: parsed.opts.project ?? null });
+    if (w.problem) {
+      process.exitCode = refuse(cmd, Object.assign(new Error(w.problem), { code: 'E_WRONG_PLACE' }));
+      process.exit(process.exitCode);
+    }
+    process.stdout.write(`${w.line}\n`);
+  }
 }
 process.exitCode = await commands[cmd](parsed, parsed.opts.root ?? '.');

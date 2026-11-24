@@ -10,7 +10,7 @@ import { join } from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { checkPush, parsePushRefs } from '../lib/guards.mjs';
-import { permissionsWrite, profileRules, pushAsk, PUSH_ALLOW } from '../lib/permissions.mjs';
+import { permissionsWrite, profileRules, pushDeny } from '../lib/permissions.mjs';
 
 const AOS = fileURLToPath(new URL('../bin/aos.mjs', import.meta.url));
 const env = { ...process.env };
@@ -28,30 +28,29 @@ function project(extra = {}) {
   return root;
 }
 
-test('the profile allows a push that names a branch, asks for a protected branch or no branch, and still denies force', () => {
+test('the profile (ORD-0044 part 7) allows every command, denies force and a push to a protected branch, and asks nothing', () => {
   const r = profileRules('medium');
-  for (const a of PUSH_ALLOW) assert.ok(r.allow.includes(a), a);
-  assert.ok(!r.ask.includes('Bash(git push *)'), 'no broad ask: it would beat the allow');
-  for (const a of ['Bash(git push)', 'Bash(git push origin)', 'Bash(git push * main)', 'Bash(git push * *:main)', 'Bash(git push * master)']) assert.ok(r.ask.includes(a), a);
-  for (const d of ['Bash(git push --force *)', 'Bash(git push * --force*)', 'Bash(git push -f *)']) assert.ok(r.deny.includes(d), d);
+  assert.deepEqual(r.ask, []);
+  for (const a of ['Bash', 'PowerShell', 'Edit', 'Write']) assert.ok(r.allow.includes(a), a);
+  for (const d of ['Bash(git push --force *)', 'Bash(git push * --force*)', 'Bash(git push -f *)', 'Bash(git push * main)', 'Bash(git push * *:main)', 'Bash(git push * HEAD:master)']) assert.ok(r.deny.includes(d), d);
   // The protected branches of the project replace the default two.
-  const custom = pushAsk(['release']);
+  const custom = pushDeny(['release']);
   assert.ok(custom.includes('Bash(git push * release)') && !custom.includes('Bash(git push * main)'));
-  // The high profile keeps asking for every push.
-  assert.ok(profileRules('high').ask.includes('Bash(git push *)'));
+  // The risk level no longer changes the permissions.
+  assert.deepEqual(profileRules('high').allow, r.allow);
 });
 
-test('permissions write uses protected_branches of project.json, and the old broad ask is replaced', () => {
+test('permissions write uses protected_branches of project.json, and the old ask rules are replaced', () => {
   const root = project({ protected_branches: ['trunk'] });
   mkdirSync(join(root, '.claude'));
-  writeFileSync(join(root, '.claude', 'settings.json'), JSON.stringify({ permissions: { ask: ['Bash(git push *)', 'Bash(my-own *)'], allow: [], deny: [] } }));
+  writeFileSync(join(root, '.claude', 'settings.json'), JSON.stringify({ permissions: { ask: ['Bash(git push *)', 'Bash(my-own *)'], allow: ['Bash(git push origin *)', 'Bash(make *)'], deny: [] } }));
   const w = permissionsWrite(root, { marketplace: null });
   assert.equal(w.path, '.claude/settings.json');
   const s = JSON.parse(readFileSync(join(root, '.claude', 'settings.json'), 'utf8'));
-  assert.ok(!s.permissions.ask.includes('Bash(git push *)'));
-  assert.ok(s.permissions.ask.includes('Bash(my-own *)'), 'a rule of the owner is kept');
-  assert.ok(s.permissions.ask.includes('Bash(git push * trunk)') && !s.permissions.ask.includes('Bash(git push * main)'));
-  assert.ok(s.permissions.allow.includes('Bash(git push origin *)'));
+  assert.deepEqual(s.permissions.ask, [], 'nothing asks');
+  assert.ok(!s.permissions.allow.includes('Bash(git push origin *)'), 'the old allow is gone');
+  assert.ok(s.permissions.allow.includes('Bash(make *)'), 'a foreign allow is kept');
+  assert.ok(s.permissions.deny.includes('Bash(git push * trunk)') && !s.permissions.deny.includes('Bash(git push * main)'));
   assert.equal(permissionsWrite(root, { marketplace: null }).changed, false);
 });
 
@@ -59,11 +58,12 @@ test('--local writes .claude/settings.local.json only, with the permission rules
   const root = project();
   const r = spawnSync(process.execPath, [AOS, 'permissions', 'write', '--local', '--root', root], { encoding: 'utf8', env, input: '' });
   assert.equal(r.status, 0, r.stderr);
-  assert.match(r.stdout, /settings\.local\.json written/);
+  assert.match(r.stdout, /settings.local.json written/);
   assert.equal(existsSync(join(root, '.claude', 'settings.json')), false);
   const s = JSON.parse(readFileSync(join(root, '.claude', 'settings.local.json'), 'utf8'));
-  assert.ok(s.permissions.allow.includes('Bash(git push origin *)'));
-  assert.ok(s.permissions.ask.includes('Bash(git push * main)'));
+  assert.ok(s.permissions.allow.includes('Bash'));
+  assert.ok(s.permissions.deny.includes('Bash(git push * main)'));
+  assert.deepEqual(s.permissions.ask, []);
   assert.equal(s.enabledPlugins, undefined);
   assert.equal(s.extraKnownMarketplaces, undefined);
   // Without --local the versioned profile is written, as before.

@@ -86,28 +86,6 @@ document.addEventListener('DOMContentLoaded', function () {
     }, { rootMargin: '-45% 0px -50% 0px' });
     $('[data-nav]').forEach(function (s) { io.observe(s); });
   }
-  /* H. The loop diagram: highlight a step, filter by who acts */
-  var info = document.getElementById('flow-info');
-  var show = function (id) {
-    $('[data-step]').forEach(function (n) { n.classList.toggle('is-on', n.getAttribute('data-step') === id); });
-    var li = document.querySelector('#flow-list [data-step="' + id + '"]');
-    if (li) info.textContent = li.textContent;
-  };
-  $('.flow [data-step]').forEach(function (g) {
-    g.setAttribute('tabindex', '0'); g.setAttribute('role', 'button');
-    var id = g.getAttribute('data-step');
-    g.addEventListener('mouseenter', function () { show(id); });
-    g.addEventListener('focus', function () { show(id); });
-    g.addEventListener('click', function () { show(id); });
-  });
-  $('[data-filter]').forEach(function (b) {
-    b.hidden = false;
-    b.addEventListener('click', function () {
-      var who = b.getAttribute('data-filter');
-      $('[data-filter]').forEach(function (x) { x.setAttribute('aria-pressed', String(x === b)); });
-      $('[data-actor]').forEach(function (n) { n.classList.toggle('is-dim', who !== 'all' && n.getAttribute('data-actor') !== who); });
-    });
-  });
 });
 </script>
 </head>
@@ -181,60 +159,56 @@ document.addEventListener('DOMContentLoaded', function () {
         <li><p class="k">Passo 1</p><h3><button class="step-toggle" type="button" aria-controls="ex-1" aria-expanded="true">Intenção</button></h3><p>Você diz o que quer, com suas palavras.</p><p class="example" id="ex-1">Por exemplo, você escreve “adicione uma página de contato”. Por enquanto, nada mais é preciso de você.</p></li>
         <li><p class="k">Passo 2</p><h3><button class="step-toggle" type="button" aria-controls="ex-2" aria-expanded="true">Ordem</button></h3><p>O diretor escreve uma ordem pequena e delimitada, com um orçamento.</p><p class="example" id="ex-2">A ordem informa seu orçamento em minutos e tentativas, seu nível de risco e as verificações que vão provar que está pronta.</p></li>
         <li><p class="k">Passo 3</p><h3><button class="step-toggle" type="button" aria-controls="ex-3" aria-expanded="true">Construção</button></h3><p>O executor trabalha dentro dos limites dessa ordem.</p><p class="example" id="ex-3">Se o agente tentar editar uma ordem ou suas verificações, a ferramenta bloqueia a edição antes que ela aconteça, desde que o plugin esteja ativo na pasta do projeto.</p></li>
-        <li><p class="k">Passo 4</p><h3><button class="step-toggle" type="button" aria-controls="ex-4" aria-expanded="true">Verificação</button></h3><p>Verificações automáticas são executadas. Ninguém avalia o próprio trabalho.</p><p class="example" id="ex-4">As verificações foram escritas pelo diretor, não pelo agente; uma ordem de alto risco as executa duas vezes.</p></li>
+        <li><p class="k">Passo 4</p><h3><button class="step-toggle" type="button" aria-controls="ex-4" aria-expanded="true">Verificação</button></h3><p>Verificações automáticas são executadas. Ninguém avalia o próprio trabalho.</p><p class="example" id="ex-4">As verificações foram escritas pelo diretor, não pelo agente; uma ordem de alto risco executa cada verificação uma vez e repete só a que falhou.</p></li>
         <li><p class="k">Passo 5</p><h3><button class="step-toggle" type="button" aria-controls="ex-5" aria-expanded="true">Evidências</button></h3><p>Os resultados são salvos como arquivos que você pode abrir.</p><p class="example" id="ex-5">O relatório guarda a saída original de cada verificação, ao lado da ordem a que pertence.</p></li>
-        <li><p class="k">Passo 6</p><h3><button class="step-toggle" type="button" aria-controls="ex-6" aria-expanded="true">Você assina</button></h3><p>Você fecha, ou devolve com uma nota.</p><p class="example" id="ex-6">Você digita CLOSE para o trabalho aprovado, ou comenta um documento; sua nota chega ao agente.</p></li>
+        <li><p class="k">Passo 6</p><h3><button class="step-toggle" type="button" aria-controls="ex-6" aria-expanded="true">Você assina</button></h3><p>Você fecha, ou devolve com uma nota.</p><p class="example" id="ex-6">Você digita CLOSE para fechar o trabalho aprovado e MERGE para levar o trabalho assinado ao ramo principal, os dois no FIRMAR; um rascunho de ordem é colocado com PLACE na mesma janela. Ou comenta um documento; sua nota chega ao agente.</p></li>
       </ol>
       <p class="band"><strong>Registro à prova de adulteração.</strong>Cada passo é gravado em um registro encadeado. Se alguém editar o passado, a cadeia se rompe e a ferramenta avisa você.</p>
       <ul class="cards small">
         <li class="card"><p><strong>Foi interrompido?</strong> Continue de onde parou; a ferramenta mostra o que ficou em aberto.</p></li>
-        <li class="card"><p><strong>Arriscado demais?</strong> Ordens de risco maior precisam da sua confirmação digitada.</p></li>
+        <li class="card"><p><strong>Arriscado demais?</strong> Ordens de risco maior precisam da sua confirmação digitada, e a verificação delas executa cada verificação uma vez.</p></li>
         <li class="card"><p><strong>Perdeu o notebook?</strong> O projeto é reconstruído a partir do repositório.</p></li>
+        <li class="card"><p><strong>Precisa parar?</strong> Uma mensagem que seja só STOP, ALTO, DETENER ou PARA para o projeto. Só você o retoma.</p></li>
+        <li class="card"><p><strong>Quem dirige?</strong> Um diretor por projeto.</p></li>
+      </ul>
+
+      <h3 class="sub" id="h-launch">Seus lançadores: um clique cada</h3>
+      <ul class="cards small launch" aria-label="Seus lançadores">
+        <li class="card"><p><strong>INICIAR</strong> prepara o projeto; faz as perguntas de configuração.</p></li>
+        <li class="card"><p><strong>FIRMAR</strong> sua janela de assinatura: CLOSE, MERGE, PLACE e sua revisão de documentos.</p></li>
+        <li class="card"><p><strong>DETENER</strong> para o projeto na hora.</p></li>
+        <li class="card"><p><strong>REANUDAR</strong> retoma um projeto parado.</p></li>
+        <li class="card"><p><strong>IMPORTAR</strong> traz de volta ao projeto a sua planilha preenchida.</p></li>
+        <li class="card"><p><strong>REPARAR</strong> repara o registro se ele um dia quebrar.</p></li>
+        <li class="card"><p><strong>ACTUALIZAR</strong> atualiza o plugin instalado para a versão atual; nenhum outro passo.</p></li>
       </ul>
 
       <figure class="panel" aria-labelledby="flow-title">
-        <figcaption><span class="kicker" id="flow-title">O ciclo num relance · quem faz o quê</span></figcaption>
-        <div class="filters" role="group" aria-label="Mostrar os passos por quem age">
-          <button type="button" data-filter="all" aria-pressed="true" hidden>Todos</button>
-          <button type="button" data-filter="person" aria-pressed="false" hidden>Pessoa</button>
-          <button type="button" data-filter="auto" aria-pressed="false" hidden>Automático</button>
-          <button type="button" data-filter="gate" aria-pressed="false" hidden>Controle</button>
-          <button type="button" data-filter="deliverable" aria-pressed="false" hidden>Entregável</button>
-        </div>
+        <figcaption><span class="kicker" id="flow-title">O ciclo num relance · seus dois toques</span></figcaption>
         <div class="flow-scroll">
-          <svg class="flow" viewBox="0 0 1220 300" role="img" aria-labelledby="flow-svg-t flow-svg-d" focusable="false">
-            <title id="flow-svg-t">O fluxo do ciclo</title>
-            <desc id="flow-svg-d">Ordem, admissão, construção, verificação, entrega, assinatura, e um retorno tracejado da assinatura para a ordem, para a melhoria contínua.</desc>
-            <defs><marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0 0L10 5L0 10z" class="ar"/></marker></defs>
-            <g class="edges">
-              <path d="M200 110H232"/><path d="M372 110H404"/><path d="M544 110H578"/><path d="M712 110H746"/><path d="M886 110H918"/>
-              <path class="loopback" d="M1015 152V240H128V158"/>
-            </g>
-            <g data-step="order" data-actor="person"><rect class="n person" x="56" y="70" width="144" height="80" rx="40"/><text x="128" y="104" class="t">1 · Ordem</text><text x="128" y="126" class="s">você a define</text></g>
-            <g data-step="admit" data-actor="auto"><rect class="n auto" x="232" y="70" width="140" height="80" rx="10"/><text x="302" y="104" class="t">2 · Admitir</text><text x="302" y="126" class="s">aos admit</text></g>
-            <g data-step="build" data-actor="auto"><rect class="n auto" x="404" y="70" width="140" height="80" rx="10"/><text x="474" y="104" class="t">3 · Construir</text><text x="474" y="126" class="s">Claude Code</text></g>
-            <g data-step="verify" data-actor="gate"><path class="n gate" d="M645 50L712 110L645 170L578 110z"/><text x="645" y="106" class="t">4 · Verificar</text><text x="645" y="126" class="s">passa ou não?</text></g>
-            <g data-step="deliver" data-actor="deliverable"><rect class="n deliverable" x="746" y="70" width="140" height="80" rx="10"/><text x="816" y="104" class="t">5 · Entregar</text><text x="816" y="126" class="s">evidências + resumo</text></g>
-            <g data-step="sign" data-actor="person"><rect class="n person" x="918" y="70" width="194" height="80" rx="40"/><text x="1015" y="104" class="t">6 · Assinar</text><text x="1015" y="126" class="s">você digita CLOSE</text></g>
-            <text x="572" y="266" class="s improve">melhoria contínua: o que se aprendeu volta como um adendo</text>
+          <svg class="loopd" id="loop-diagram" viewBox="0 0 680 400" role="img" aria-labelledby="loop-svg-t loop-svg-d" focusable="false">
+            <title id="loop-svg-t">O ciclo com seus dois toques</title>
+            <desc id="loop-svg-d">As regras do ciclo regem cada passo. Dentro do orquestrador, que vem depois: a ordem do diretor, a execução do executor, a verificação com aos verify e a assinatura com CLOSE e MERGE. Toque um: você pede. Toque dois: você assina. As observações transformam cada falha em teste ou regra. As métricas por ordem vêm depois.</desc>
+            <defs><marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M2 1L8 5L2 9" class="ar"/></marker></defs>
+            <rect class="b rules" x="40" y="20" width="600" height="56" rx="8"/>
+            <text x="340" y="38" class="h">Regras do ciclo</text><text x="340" y="58" class="s">plugin, AGENTS.md, specs · regem cada passo</text>
+            <path class="ln" d="M340 76V94"/>
+            <rect class="b soon" x="40" y="96" width="600" height="160" rx="16"/>
+            <text x="340" y="116" class="h">Orquestrador (em breve)</text><text x="340" y="134" class="s">sessão nova por execução, modelo por papel, leva as mensagens</text>
+            <rect class="b step" x="60" y="152" width="125" height="56" rx="8"/><text x="122" y="170" class="h">Ordem</text><text x="122" y="190" class="s">Diretor</text>
+            <rect class="b step" x="205" y="152" width="125" height="56" rx="8"/><text x="267" y="170" class="h">Execução</text><text x="267" y="190" class="s">Executor</text>
+            <rect class="b step" x="350" y="152" width="125" height="56" rx="8"/><text x="412" y="170" class="h">Verificação</text><text x="412" y="190" class="s">aos verify</text>
+            <rect class="b touch" x="495" y="152" width="125" height="56" rx="8"/><text x="557" y="170" class="h">Assinatura</text><text x="557" y="190" class="s">CLOSE e MERGE</text>
+            <path class="ln" d="M185 180H203"/><path class="ln" d="M330 180H348"/><path class="ln" d="M475 180H493"/>
+            <text x="122" y="232" class="s tt">toque 1: você pede</text><text x="557" y="232" class="s tt">toque 2: você assina</text>
+            <rect class="b obs" x="40" y="276" width="280" height="56" rx="8"/><text x="180" y="294" class="h">Observações</text><text x="180" y="314" class="s">↻ cada falha vira teste ou regra</text>
+            <rect class="b soon" x="360" y="276" width="280" height="56" rx="8"/><text x="500" y="294" class="h">Métricas por ordem (em breve)</text><text x="500" y="314" class="s">toques, tempo ativo, custo</text>
           </svg>
         </div>
         <ul class="legend" aria-label="Legenda">
-          <li><i class="sw person"></i>Pessoa (decide e assina)</li>
-          <li><i class="sw auto"></i>Automático (aos)</li>
-          <li><i class="sw gate"></i>Controle (passa / não passa)</li>
-          <li><i class="sw deliverable"></i>Entregável</li>
-          <li><i class="sw improve"></i>Melhoria contínua</li>
+          <li><i class="sw touch"></i>seu toque</li>
+          <li><i class="sw soon"></i>em breve, ainda não disponível</li>
         </ul>
-        <p class="flow-info" id="flow-info" aria-live="polite">Aponte ou toque em um passo para ver o que acontece e quem age.</p>
-        <ol class="flow-list" id="flow-list">
-          <li data-step="order" data-actor="person"><strong>Ordem</strong> — você define o que quer; o diretor coloca por escrito. <em>Quem age: você.</em></li>
-          <li data-step="admit" data-actor="auto"><strong>Admitir</strong> — aos admit registra a ordem e a coloca na fila. <em>Quem age: a ferramenta.</em></li>
-          <li data-step="build" data-actor="auto"><strong>Construir</strong> — o agente de código trabalha dentro dos limites da ordem. <em>Quem age: o agente.</em></li>
-          <li data-step="verify" data-actor="gate"><strong>Verificar</strong> — as verificações rodam; o trabalho passa ou volta. <em>Quem age: a ferramenta, como controle.</em></li>
-          <li data-step="deliver" data-actor="deliverable"><strong>Entregar</strong> — as evidências e um resumo ficam salvos para você. <em>Resultado: arquivos que você pode abrir.</em></li>
-          <li data-step="sign" data-actor="person"><strong>Assinar</strong> — você fecha, ou devolve com uma nota. <em>Quem age: você.</em></li>
-        </ol>
       </figure>
     </div>
   </section>
@@ -290,6 +264,20 @@ Document: Hosting options for the new app (order ORD-0018)
         </div>
       </figure>
       <p class="note"><span>Telas ilustrativas · ordens de exemplo</span></p>
+    </div>
+  </section>
+
+  <section class="view" id="next" data-status="not-available" aria-labelledby="h-next">
+    <div class="wrap">
+      <p class="tag">Em breve</p>
+      <h2 id="h-next">Em breve: <em>o orquestrador.</em></h2>
+      <p class="lead">Ainda não está disponível. É para onde o ciclo vai.</p>
+      <ul class="cards small">
+        <li class="card"><p><strong>Uma sessão nova a cada execução.</strong> Cada execução começa limpa.</p></li>
+        <li class="card"><p><strong>Um modelo para cada papel.</strong> O diretor e o executor recebem cada um o que lhe convém.</p></li>
+        <li class="card"><p><strong>Leva as mensagens.</strong> Entre diretor e executor, para que você só peça e assine.</p></li>
+      </ul>
+      <p class="band"><strong>Ainda não disponível.</strong>Nada desta seção funciona hoje.</p>
     </div>
   </section>
 

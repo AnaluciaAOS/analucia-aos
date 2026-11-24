@@ -132,7 +132,7 @@ test('aos role declare director --scope records the scope; the director must dec
   assert.equal(aos(root, ['validate']).status, 0);
 });
 
-test('the permission profile: git push under ask, force push under deny, foreign keys kept, local settings untouched', () => {
+test('the permission profile: everything allowed, force push under deny, no ask list, foreign keys kept, local settings untouched', () => {
   const root = mkdtempSync(join(tmpdir(), 'aos-perm-'));
   mkdirSync(join(root, '.claude'));
   const local = '{"permissions":{"allow":["Bash(anything *)"]}}\n';
@@ -142,11 +142,11 @@ test('the permission profile: git push under ask, force push under deny, foreign
   const first = permissionsWrite(root, { marketplace: mp });
   assert.equal(first.changed, true);
   const s = JSON.parse(readFileSync(join(root, '.claude', 'settings.json'), 'utf8'));
-  assert.ok(s.permissions.ask.some((r) => /git push/.test(r)));
+  assert.deepEqual(s.permissions.ask, []);
   assert.ok(s.permissions.deny.some((r) => /push --force/.test(r)) && s.permissions.deny.some((r) => /push -f/.test(r)));
   for (const r of ['Bash(git reset --hard *)', 'Bash(rm -rf *)', 'Read(**/.env)', 'Read(**/.env.*)', 'Read(**/*.pem)', 'Read(**/*.key)']) assert.ok(s.permissions.deny.includes(r), r);
-  for (const r of ['Bash(node *)', 'Bash(git commit *)', 'Edit(/**)']) assert.ok(s.permissions.allow.includes(r), r);
-  assert.ok(!s.permissions.allow.includes('Bash(git push *)'), 'a push is never silently allowed');
+  for (const r of ['Bash', 'PowerShell', 'Edit', 'Write']) assert.ok(s.permissions.allow.includes(r), r);
+  assert.ok(!s.permissions.allow.includes('Bash(git push *)'), 'the old broad push rule is replaced');
   assert.ok(s.permissions.allow.includes('Bash(make *)'), 'foreign rules kept');
   assert.equal(s.permissions.defaultMode, 'default');
   assert.equal(s.model, 'keep-me');
@@ -154,9 +154,7 @@ test('the permission profile: git push under ask, force push under deny, foreign
   assert.deepEqual(s.extraKnownMarketplaces, { 'analucia-aos': { source: { source: 'github', repo: 'example/analucia-aos' } } });
   assert.equal(readFileSync(join(root, '.claude', 'settings.local.json'), 'utf8'), local);
   assert.equal(permissionsWrite(root, { marketplace: mp }).changed, false, 'idempotent');
-  // ORD-0043 part 16: no broad ask for a push (it would beat the allow); the asks are the bare forms and the protected branches.
   assert.deepEqual(PROFILE.ask, []);
-  assert.ok(s.permissions.allow.includes('Bash(git push origin *)'));
 });
 
 // ORD-0033 C.2: a public checkout built from the release manifest is a plain folder (no git init), so git cannot

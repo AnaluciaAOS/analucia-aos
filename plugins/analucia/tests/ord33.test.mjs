@@ -217,7 +217,7 @@ test('ORD-0033 B.3: same folder, same environment: the SessionStart hook and aos
     const hook = aos(['hook', 'session-start'], { env, input: JSON.stringify({ session_id: 's', source: 'startup', cwd: root }) });
     assert.ok(hook.stdout.startsWith(t('session.not_initialised', { cwd: '', cmd: '' }).split(':')[0]), `${l}: hook: ${hook.stdout}`);
     const check = aos(['init', '--check', '--root', root], { env });
-    assert.ok(check.stdout.startsWith(t('check.title')), `${l}: init --check: ${check.stdout.slice(0, 120)}`);
+    assert.ok(check.stdout.split('\n')[1].startsWith(t('check.title')), `${l}: init --check: ${check.stdout.slice(0, 120)}`);
   }
 });
 

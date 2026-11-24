@@ -1,17 +1,19 @@
-analucia docs for plugin version 0.7.0
+analucia docs for plugin version 0.9.0
 
-# Analucia AOS docs — plugin `analucia` 0.7.0
+# Analucia AOS docs — plugin `analucia` 0.9.0
 
 Read the docs of this version, not what you remember. Run commands as `node plugins/analucia/bin/aos.mjs <command>` from the repo root.
 
 ## Specifications
 
-- `core/NOMENCLATURE.md` — SPEC-0001 version 0.1.0
-- `core/SPEC-0002-VERIFY-AND-GUARDS.md` — SPEC-0002 version 0.1.0
-- `core/SPEC-0003-RULES-ERRORS-RISK-COST.md` — SPEC-0003 version 0.1.0
-- `core/SPEC-0004-OWNER-SHEET-AND-SELF-GOVERNANCE.md` — SPEC-0004 version 0.1.0
-- `core/SPEC-0005-ONBOARDING.md` — SPEC-0005 version 0.1.0
-- `core/SPEC-0006-ADOPTION-AUDIT.md` — SPEC-0006 version 0.1.0
+Each spec carries its own version on its `version:` line; this list pins none, so it never goes stale when a spec changes (`aos validate` refuses a core spec whose text changed with the same version).
+
+- `core/NOMENCLATURE.md` — SPEC-0001
+- `core/SPEC-0002-VERIFY-AND-GUARDS.md` — SPEC-0002
+- `core/SPEC-0003-RULES-ERRORS-RISK-COST.md` — SPEC-0003
+- `core/SPEC-0004-OWNER-SHEET-AND-SELF-GOVERNANCE.md` — SPEC-0004
+- `core/SPEC-0005-ONBOARDING.md` — SPEC-0005
+- `core/SPEC-0006-ADOPTION-AUDIT.md` — SPEC-0006
 - `plugins/analucia/core/ORDER_FORMAT.md` — order file format and validator codes
 - `plugins/analucia/core/enums.json` — every closed list (machine source)
 
@@ -41,7 +43,7 @@ Every command the owner runs ends with exactly one closing line: `OK: <what is n
 - `aos init [--locale en|pt|zh-Hans|hi|es] [--answers <file> [--dry-run]]` — owner, own TTY (dry run: anyone): guided onboarding: three moments, safe defaults, then the configuration of SPEC-0005 §4 after CONFIRM
 - `aos init --hosting managed|own-server|"already: <where>"|later [--dry-run]` — owner, own TTY (dry run: anyone): change only the hosting answer: project.json hosting, a hosting.chosen event; the plan shows the dated cost table (AMD-0006)
 - `aos init --check` — any: the setup checks of SPEC-0005 §5 (PASS/WARN/FAIL, each WARN/FAIL with next); records the inventory; saves .analucia/views/onboarding.md; exit 1 on any FAIL
-- `aos permissions write [--local]` — owner or director: write .claude/settings.json: permission profile (allow a `git push` that names a branch that is not protected; ask for a push that names a protected branch or no branch; deny force push) and the plugin enabled for this repo (SPEC-0004 §3, §7; ORD-0043 part 16). With `--local` it writes the permission rules only, to `.claude/settings.local.json`, which git ignores (AMD-0017 section 2)
+- `aos permissions write [--local] [--permissions-only]` — owner or director: write .claude/settings.json: permission profile (allow every shell command and edit; deny force push, push to a protected branch, `git reset --hard`, mass deletes, reading secrets, writing to a real database; no ask list) and the plugin enabled for this repo (SPEC-0004 §3, §7; ORD-0043 part 16). With `--local` it writes the permission rules only, to `.claude/settings.local.json`, which git ignores (AMD-0017 section 2)
 - `aos role declare director --scope "<paths>"` — director: role.declared with the director write scope (SPEC-0004 §6)
 - `aos admit ORD-NNNN` — director: lists the open orders (addendum before new order, AMD-0007 §4), then record.created with version pins, draft → ready → queued (SPEC-0003 §5)
 - `aos cost record --usd <n> --source "<text>" [--order ORD-NNNN] [--month YYYY-MM]` — director (or owner): log a cost; threshold alerts at 50/80/100% inform the owner and never block
@@ -143,8 +145,11 @@ Every command the owner runs ends with exactly one closing line: `OK: <what is n
 - [E_COMMIT_AFTER_FINISH](errors/E_COMMIT_AFTER_FINISH.md) — next (executor): Stop committing for that order: write what you found in the report as pending and tell the director, who opens a new run or a new order for it.
 - [E_COST_EFFECT_ENUM](errors/E_COST_EFFECT_ENUM.md) — next (director): Set cost_effect to one or more of none, build, deploy, service, data (cost_effects in plugins/analucia/core/enums.json).
 - [E_DECISION_ENUM](errors/E_DECISION_ENUM.md) — next (director): Use one of the admission_decisions values from plugins/analucia/core/enums.json and write the event again with aos.
+- [E_DENYLIST](errors/E_DENYLIST.md) — next (owner): Remove the listed lines from those commits (a history rewrite belongs to the owner), or restore the list file named by release_denylist in .analucia/project.json, then push again.
+- [E_DENYLIST_FILE](errors/E_DENYLIST_FILE.md) — next (director): Remove the listed lines from the order files named in the message (the order, its verify file, its rollback plan or its request file), or restore the list file named by release_denylist in .analucia/project.json; then lock and admit again.
 - [E_DIRECTOR_RUN](errors/E_DIRECTOR_RUN.md) — next (director): Leave the run to an executor: the owner opens another session for it, and this session keeps writing drafts.
 - [E_DIRECTOR_FILE_CHANGED](errors/E_DIRECTOR_FILE_CHANGED.md) — next (director): Restore the listed director files from git, or re-issue them and refresh .analucia/director.lock.
+- [E_DRAFT_ASSUMES](errors/E_DRAFT_ASSUMES.md) — next (director): Fix what the message names (the base, a file, a command or a service the draft assumes), then run aos drafts again.
 - [E_DUPLICATE_KEY](errors/E_DUPLICATE_KEY.md) — next (director): Remove the repeated key from the front matter so each key appears once.
 - [E_EVIDENCE_ENUM](errors/E_EVIDENCE_ENUM.md) — next (executor): Use one of the evidence_levels values from plugins/analucia/core/enums.json and write the event again with aos.
 - [E_FIELD_TYPE](errors/E_FIELD_TYPE.md) — next (director): Change the value named in the message to the stated type (date YYYY-MM-DD, positive integer, inline list, object or string).
@@ -152,6 +157,7 @@ Every command the owner runs ends with exactly one closing line: `OK: <what is n
 - [E_FILE_TYPE](errors/E_FILE_TYPE.md) — next (executor): Run aos validate on a project directory or on an order, verify file, director.lock, project.json or events.jsonl.
 - [E_FORM_CLASS](errors/E_FORM_CLASS.md) — next (director): Remove "class": "form" from the check named in the message: the tests, the log, the order files, the roles and the release guard are substance and are never waived.
 - [E_FRONT_MATTER](errors/E_FRONT_MATTER.md) — next (director): Rewrite the order front matter as flat key: value lines between two --- lines.
+- [E_GREP_NON_ASCII](errors/E_GREP_NON_ASCII.md) — next (director): Replace the grep check named in the message with aos text has <file> "<text>" (or aos text lacks), then run aos validate again.
 - [E_ID_FORMAT](errors/E_ID_FORMAT.md) — next (director): Use an ID of the right format: ORD-0000 or ORD-0000.A for orders, a 26-character ULID for events.
 - [E_ID_PREFIX](errors/E_ID_PREFIX.md) — next (director): Give the record the ID named in the message: new records carry the code of the project (aos ids prints the next free ID of each kind).
 - [E_ID_MISMATCH](errors/E_ID_MISMATCH.md) — next (director): Make the id (or order) field equal the file name without its extension.
@@ -185,11 +191,13 @@ Every command the owner runs ends with exactly one closing line: `OK: <what is n
 - [E_REVIEW_PATH](errors/E_REVIEW_PATH.md) — next (executor): Register a document that lives inside the project, with a path relative to its root, then run aos review request again.
 - [E_RISK_CLOSE](errors/E_RISK_CLOSE.md) — next (owner): Close this order yourself from your own terminal with aos close ORD-NNNN; only risk: low orders may be closed with --as director.
 - [E_RISK_ENUM](errors/E_RISK_ENUM.md) — next (director): Set risk in the order to low, medium or high (risk_levels in plugins/analucia/core/enums.json).
+- [E_SECRET_PASTED](errors/E_SECRET_PASTED.md) — next (director): Take the text that asks the owner for a key, token, password or secret out of the draft, then run aos drafts again.
 - [E_ROLES](errors/E_ROLES.md) — next (director): Run aos agents-md sync and keep CLAUDE.md to the line @AGENTS.md, with director instructions moved to the director entrypoint.
 - [E_SCRATCH_REMAINS](errors/E_SCRATCH_REMAINS.md) — next (executor): Stop the listed processes and delete the listed folders, check with aos scratch check, then finish the run again.
 - [E_SECRET](errors/E_SECRET.md) — next (owner): Remove the secret from the listed commit and file, rotate it at its provider, then push again.
 - [E_SECRET_IN_URL](errors/E_SECRET_IN_URL.md) — next (owner): Remove the credential from the remote URL with git remote set-url, rotate it, then push again.
 - [E_SHEET_VALUE](errors/E_SHEET_VALUE.md) — next (owner): Fix the listed cells in the owner sheet (or export a fresh one with aos ceo export) and run aos ceo import again.
+- [E_SPEC_VERSION](errors/E_SPEC_VERSION.md) — next (director): Change the version: line of the core spec named in the message (and its version_approved when the owner approves it) so it differs from the one on main, then run aos validate again.
 - [E_STATE_ENUM](errors/E_STATE_ENUM.md) — next (executor): Use one of the order_states values from plugins/analucia/core/enums.json and write the event again with aos.
 - [E_STATE_IN_DEFINITION](errors/E_STATE_IN_DEFINITION.md) — next (director): Remove the state key from the order file; state is derived from the event log.
 - [E_SUPERSEDED_NO_REF](errors/E_SUPERSEDED_NO_REF.md) — next (director): Record the transition to superseded with payload.superseded_by set to the replacing record ID.
@@ -202,3 +210,4 @@ Every command the owner runs ends with exactly one closing line: `OK: <what is n
 - [E_WIP_LIMIT](errors/E_WIP_LIMIT.md) — next (executor): Finish the active order first with aos run finish, or wait; only the owner raises wip_limit.
 - [E_WORK_COMPLETE](errors/E_WORK_COMPLETE.md) — next (executor): Finish the run with --outcome done; ask for the owner's review with aos review request, which he decides at the signature.
 - [E_WORKFLOW_ENUM](errors/E_WORKFLOW_ENUM.md) — next (director): Remove the workflow key or set it to qrspi, then refresh director.lock.
+- [E_WRONG_PLACE](errors/E_WRONG_PLACE.md) — next (owner): Open the window of the project the command was written for (its launcher, or the terminal of that project) and run it there.

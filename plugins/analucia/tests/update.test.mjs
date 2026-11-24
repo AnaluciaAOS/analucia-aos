@@ -8,7 +8,7 @@ import { tmpdir } from 'node:os';
 import { delimiter, dirname, join } from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { LAUNCHER_NAMES } from '../lib/launchers.mjs';
+import { LAUNCHER_NAMES, installLaunchers } from '../lib/launchers.mjs';
 import { LOCALES, catalog } from '../lib/onboarding.mjs';
 import { PRIVATE_MARKETPLACE, PUBLIC_MARKETPLACE, findClaude, updateWarning } from '../lib/update.mjs';
 import { MARKETPLACE_FILE, PUBLIC_MARKETPLACE as BUILDER_NAME, publicBytes } from '../../../scripts/build-public-tree.mjs';
@@ -198,6 +198,8 @@ test('the ACTUALIZAR launcher is written with the others and runs aos update; it
   const dir = scratch();
   const env = envWith(null);
   assert.equal(aos(dir, ['launchers', 'install'], env).status, 0);
+  installLaunchers(dir, { platform: 'win32' });
+  installLaunchers(dir, { platform: 'linux' }); // ORD-0046 part 7: each system writes its own file; both texts are checked
   assert.match(readFileSync(join(dir, 'ACTUALIZAR.cmd'), 'utf8'), /" "%~dp0\." update\r\n/);
   assert.match(readFileSync(join(dir, 'ACTUALIZAR.sh'), 'utf8'), /" "\$PWD" update\n/);
   for (const l of LOCALES) {

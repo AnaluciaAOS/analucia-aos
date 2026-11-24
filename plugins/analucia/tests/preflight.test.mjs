@@ -89,7 +89,7 @@ test('aos preflight: runs the checks, prints each result and one final line, wri
 test('aos preflight works for a draft, before the owner is asked to place anything', async () => {
   const root = project();
   writeFileSync(join(root, '.analucia', 'drafts', 'ORD-0001.md'), order('ORD-0001'));
-  writeFileSync(join(root, '.analucia', 'drafts', 'ORD-0001.json'), verifyFile('ORD-0001', PRE));
+  writeFileSync(join(root, '.analucia', 'drafts', 'ORD-0001.request.md'), '- a point of the request => the draft'), writeFileSync(join(root, '.analucia', 'drafts', 'ORD-0001.json'), verifyFile('ORD-0001', PRE));
   assert.equal(listDrafts(root)[0].ok, true);
   const bad = aos(root, ['preflight', 'ORD-0001']);
   assert.equal(bad.status, 1);

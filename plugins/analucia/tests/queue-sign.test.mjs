@@ -1,11 +1,12 @@
 // AMD-0005: the queue view, pause and resume by the executor, and one signing command for the owner.
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
+import { installLaunchers, launcherFile } from '../lib/launchers.mjs';
 import { hashLF } from '../lib/lock.mjs';
 import { appendEvent, logPath, readLog } from '../lib/log.mjs';
 import { pauseOrder, resumeOrder } from '../lib/lifecycle.mjs';
@@ -181,16 +182,20 @@ test('the launcher files are written, run aos sign, and contain no absolute pers
   const { root } = project([]);
   const r = aos(root, ['sign', '--install-launcher']);
   assert.equal(r.status, 0, r.stderr);
-  assert.match(r.stdout, /FIRMAR\.cmd: created\. Double-click it to sign\.\nFIRMAR\.sh: created\./);
+  // ORD-0046 part 7: one FIRMAR, the one this system opens (.cmd on Windows, .sh elsewhere).
+  assert.match(r.stdout, new RegExp(`${launcherFile('FIRMAR').replace('.', '\\.')}: created\\. Double-click it to sign\\.\\n`));
+  assert.equal(existsSync(join(root, launcherFile('FIRMAR', process.platform === 'win32' ? 'linux' : 'win32'))), false, 'not two');
+  installLaunchers(root, { only: ['FIRMAR'], platform: 'win32' });
+  installLaunchers(root, { only: ['FIRMAR'], platform: 'linux' });
   const cmd = readFileSync(join(root, 'FIRMAR.cmd'), 'utf8');
   const sh = readFileSync(join(root, 'FIRMAR.sh'), 'utf8');
   // ORD-0040 part 4: FIRMAR comes from the one launcher template (lib/launchers.mjs).
-  assert.match(cmd, /" "%~dp0\." sign\r\n/);
-  assert.match(sh, /" "\$PWD" sign\n/);
+  assert.match(cmd, /" "%~dp0\." sign --project [^ \r\n]+\r\n/);
+  assert.match(sh, /" "\$PWD" sign --project [^ \n]+\n/);
   assert.match(cmd, /\r\n/, 'Windows line endings for the .cmd');
   for (const text of [cmd, sh]) {
     for (const personal of [homedir(), homedir().replace(/\\/g, '/'), root, root.replace(/\\/g, '/'), tmpdir()]) assert.ok(!text.includes(personal), `contains ${personal}`);
     assert.doesNotMatch(text, /[A-Za-z]:\\Users\\|\/home\/|\/Users\//);
   }
-  assert.deepEqual(installLauncher(root).map((x) => x.status), ['unchanged', 'unchanged']);
+  assert.deepEqual(installLauncher(root).map((x) => x.status), ['unchanged']);
 });

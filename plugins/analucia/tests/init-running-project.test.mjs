@@ -91,7 +91,7 @@ test('init in a project with commits and its own CLAUDE.md: roles pass, nothing 
 
   // The director entrypoint is a file of its own (not CLAUDE.md), with the real commands of this machine.
   const entry = readFileSync(join(root, '.analucia', 'DIRECTOR.md'), 'utf8');
-  assert.match(entry, /\.analucia\/drafts\/ORD-NNNN\.md/);
+  assert.match(entry, /\.analucia\/drafts\/draft-<topic>\.md/);
   assert.match(entry, /An order without its verify file is not placed/);
   assert.ok(entry.includes(`node "${AOS.split('\\').join('/')}" drafts`), 'the drafts command as it exists here');
   assert.doesNotMatch(entry, /node plugins\/analucia\/bin\/aos\.mjs/);

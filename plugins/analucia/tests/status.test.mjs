@@ -112,7 +112,7 @@ test('the metric: minutes from the decision to the first run, and the owner step
   const root = project();
   // The owner's step: he places a draft that carries its decision. One step, recorded by the placement itself.
   writeFileSync(join(root, '.analucia', 'drafts', 'SHOP-0001.md'), ORDER('SHOP-0001', ['decision: Sell the summer stock at cost']));
-  writeFileSync(join(root, '.analucia', 'drafts', 'SHOP-0001.json'), VERIFY('SHOP-0001'));
+  writeFileSync(join(root, '.analucia', 'drafts', 'SHOP-0001.request.md'), '- a point of the request => the draft'), writeFileSync(join(root, '.analucia', 'drafts', 'SHOP-0001.json'), VERIFY('SHOP-0001'));
   assert.deepEqual(validateOrderText(ORDER('SHOP-0001', ['decision: Sell the summer stock at cost']), 'SHOP-0001.md', { pinned: true }), []);
   assert.ok(validateOrderText(ORDER('SHOP-0001', ['decision: [a, b]']), 'SHOP-0001.md', { pinned: true }).length, 'one line of text');
   const placed = await sign(root, { isTTY: true, push: false, out: () => {}, ask: async () => 'PLACE', now: at('10:00') });

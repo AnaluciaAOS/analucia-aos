@@ -8,6 +8,7 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { personLocale } from './locale.mjs';
 import { catalog } from './onboarding.mjs';
+import { projectName } from './where.mjs';
 
 // name -> the aos arguments it runs. `drop`: a file dropped on the launcher is passed on (the owner sheet).
 export const LAUNCHERS = [
@@ -20,6 +21,10 @@ export const LAUNCHERS = [
   { name: 'REPARAR', args: ['repair-log'] },
   // ORD-0043 part 7: the plugin is updated by a click (any role may run it: it changes no project file).
   { name: 'ACTUALIZAR', args: ['update'] },
+  // ORD-0046 part 2: what runs now, which part it is on and whether it waits for the owner (reads only).
+  { name: 'ESTADO', args: ['status', '--owner'] },
+  // ORD-0046 part 4: the owner's one button for the permission files (owner only: terminal and typed word).
+  { name: 'PERMISOS', args: ['permissions', 'apply'] },
 ];
 export const LAUNCHER_NAMES = LAUNCHERS.map((l) => l.name);
 // The launcher file a person clicks on this platform.
@@ -56,12 +61,13 @@ export const RUNNER = [
 const safe = (s) => String(s).replace(/["%&|<>^!`$\\()]/g, '').replace(/\r?\n/g, ' ').trim();
 
 // The one template: { cmd, sh } for one launcher, with its texts in the owner's language.
-export function launcherText({ name, args, drop = false }, t) {
+export function launcherText({ name, args, drop = false }, t, project = null) {
   const what = safe(t(`launcher.what.${name}`));
   const noNode = safe(t('launcher.no_node'));
   const noPlugin = safe(t('launcher.no_plugin'));
   const close = safe(t('launcher.close'));
-  const line = args.join(' ');
+  // ORD-0047 part 8: a launcher of an owner command carries the project it was written for; the command stops elsewhere.
+  const line = [...args, ...(project && name !== 'ACTUALIZAR' ? ['--project', safe(project).split(' ').join('_')] : [])].join(' ');
   const cmd = [
     '@echo off',
     `rem Analucia: ${what} (aos ${line}). Written by aos launchers install.`,
@@ -98,12 +104,15 @@ export function launcherText({ name, args, drop = false }, t) {
 
 // Writes the launchers in the project root. Idempotent: a second run reports every file unchanged.
 // `only`: a list of launcher names (aos sign --install-launcher writes FIRMAR alone).
-export function installLaunchers(root, { only = LAUNCHER_NAMES, locale = personLocale(root), dryRun = false } = {}) {
+// ORD-0046 part 7 (OBS-194): one file per launcher, the one this system opens: .cmd on Windows, .sh elsewhere, so the
+// owner sees one FIRMAR and not two.
+export function installLaunchers(root, { only = LAUNCHER_NAMES, locale = personLocale(root), dryRun = false, platform = process.platform } = {}) {
   const t = catalog(locale);
   const written = [];
   for (const l of LAUNCHERS.filter((x) => only.includes(x.name))) {
-    const text = launcherText(l, t);
-    for (const [file, body, mode] of [[`${l.name}.cmd`, text.cmd, 0o644], [`${l.name}.sh`, text.sh, 0o755]]) {
+    const text = launcherText(l, t, projectName(root));
+    const files = platform === 'win32' ? [[`${l.name}.cmd`, text.cmd, 0o644]] : [[`${l.name}.sh`, text.sh, 0o755]];
+    for (const [file, body, mode] of files) {
       const p = join(root, file);
       const status = !existsSync(p) ? 'created' : readFileSync(p, 'utf8') !== body ? 'updated' : 'unchanged';
       if (status !== 'unchanged' && !dryRun) writeFileSync(p, body, { mode });

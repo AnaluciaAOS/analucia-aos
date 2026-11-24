@@ -23,7 +23,25 @@ export function reviewPath(root, path) {
   return rel;
 }
 
-export const fileHash = (root, rel) => (existsSync(join(root, rel)) && statSync(join(root, rel)).isFile() ? hashLF(readFileSync(join(root, rel))) : null);
+// ORD-0047 part 16 (OBS-214): a document for the owner may carry one fixed section "## Estado" (status only). The hash an
+// approval binds to leaves that section out, so changing only the status keeps the approval; any change elsewhere voids it.
+// The section runs from its heading to the next heading of level 1 or 2, or the end. A document with no such section is
+// hashed as its bytes, as before, so no earlier approval changes.
+export const STATUS_HEADING = '## Estado';
+export function withoutStatus(text) {
+  const lines = String(text).replace(/\r\n/g, '\n').split('\n');
+  const start = lines.findIndex((l) => /^## Estado\s*$/.test(l));
+  if (start === -1) return null;
+  const end = lines.findIndex((l, i) => i > start && /^#{1,2} /.test(l));
+  const before = lines.slice(0, start).join('\n').replace(/\s+$/, '');
+  const after = end === -1 ? '' : lines.slice(end).join('\n').replace(/\s+$/, '');
+  return `${before}${after ? `\n\n${after}` : ''}\n`;
+}
+export function reviewHash(bytes) {
+  const stripped = withoutStatus(Buffer.from(bytes).toString('utf8'));
+  return hashLF(stripped === null ? bytes : Buffer.from(stripped, 'utf8'));
+}
+export const fileHash = (root, rel) => (existsSync(join(root, rel)) && statSync(join(root, rel)).isFile() ? reviewHash(readFileSync(join(root, rel))) : null);
 
 // ORD-0042 part 9 (OBS-153): a document for the owner ends with the fixed section "## Decisiones". Each decision is one
 // question followed by its options, one per line ("- A) …", "- B) …"); a document with nothing to decide writes the
@@ -77,8 +95,20 @@ export function requestReview(root, path, { order, agent, now = new Date() } = {
 // One entry per path, from the log only, plus the current hash of the file on disk.
 //   status: waiting (no decision for this content since the last request) | approve | comment | reject | missing
 //   correction: the latest event for the path is a comment or reject (the agent has a note to apply)
+// ORD-0046 part 7 (OBS-195): the order that was working when the document was last requested.
+function workingOrderAt(events, index) {
+  const open = [];
+  for (let i = 0; i < index; i++) {
+    const e = events[i];
+    if (e.type === 'run.started' && e.subject) open.push(e.subject);
+    else if (e.type === 'run.finished') { const k = open.lastIndexOf(e.subject); if (k !== -1) open.splice(k, 1); }
+  }
+  return open.at(-1) ?? null;
+}
+
 export function reviewState(root, events = readLog(root).events) {
   const docs = new Map();
+  const orders = replay(events).orders;
   for (const [i, e] of events.entries()) {
     if (e.type !== 'review.requested' && e.type !== 'review.decision') continue;
     const p = e.payload ?? {};
@@ -96,7 +126,11 @@ export function reviewState(root, events = readLog(root).events) {
     const latest = d.decisions.at(-1) ?? null;
     const status = !current ? 'missing' : counting ? counting.decision : 'waiting';
     const correction = d.last === 'review.decision' && latest && NOTE_REQUIRED.has(latest.decision) ? latest : null;
-    return { path: d.path, order: d.order, sha256: current, requested: d.requested && { ts: d.requested.ts, sha256: d.requested.sha256 }, decision: counting, status, correction };
+    // A document whose order is closed is not shown for that order when another order changed it: it is reviewed in
+    // the order that was working when it was requested again (OBS-195).
+    const worker = d.requested ? workingOrderAt(events, d.requested.i) : null;
+    const shownIn = orders[d.order]?.state === 'closed' && worker && worker !== d.order ? worker : d.order;
+    return { path: d.path, order: d.order, shownIn, sha256: current, requested: d.requested && { ts: d.requested.ts, sha256: d.requested.sha256 }, decision: counting, status, correction };
   });
 }
 
@@ -113,9 +147,19 @@ export function describe(root, rel) {
   return { title, summary };
 }
 
+// OBS-199: a comment sends an order back to work, so it needs a real note: not empty, not only the word itself, at
+// least 10 letters.
+export const COMMENT_MIN_LETTERS = 10;
+export function usefulComment(note) {
+  const text = String(note ?? '').trim();
+  if (/^(comment|comentar|comentario|comenta)[\s.!:]*$/i.test(text)) return false;
+  return (text.match(/\p{L}/gu) ?? []).length >= COMMENT_MIN_LETTERS;
+}
+
 export function decideReview(root, rel, { decision, note = '', now = new Date() }) {
   if (!REVIEW_DECISIONS.includes(decision)) throw new RuleError('E_REVIEW_DECISION', `${JSON.stringify(decision)} is not one of: ${REVIEW_DECISIONS.join(', ')}`);
   if (NOTE_REQUIRED.has(decision) && !note.trim()) throw new RuleError('E_REVIEW_DECISION', `"${decision}" needs a note`);
+  if (decision === 'comment' && !usefulComment(note)) throw new RuleError('E_REVIEW_DECISION', `a comment needs a note of at least ${COMMENT_MIN_LETTERS} letters that is not only the word "comment": nothing was recorded; write the note, or approve`);
   const doc = reviewState(root).find((d) => d.path === rel);
   if (!doc || doc.status !== 'waiting') throw new RuleError('E_REVIEW_DECISION', `${rel} is not waiting for a review`);
   appendEvent(root, { type: 'review.decision', actor: 'owner', subject: doc.order, payload: { path: rel, decision, note: note.trim(), sha256: doc.sha256, order: doc.order } }, { now });
@@ -137,11 +181,15 @@ export function openWithSystemViewer(abs) {
 // (an empty answer leaves it for later). Returns the decisions made.
 // ORD-0043 part 6: with `order`, only the documents of that order, together under one heading (`aos sign` shows
 // them right before the checks of the order); `announce: false` leaves the total line to the caller.
-export async function reviewDocuments(root, { t, ask, out, now = new Date(), open = openWithSystemViewer, order = null, announce = true }) {
-  const waiting = waitingReviews(root).filter((d) => !order || d.order === order);
+// ORD-0046 part 7: `docs` is an explicit list (the documents of closed orders, shown last under `heading`). The owner's
+// words have Spanish forms (APROBAR, COMENTAR, RECHAZAR, ABRIR); a note may follow the word on the same line.
+export const REVIEW_WORDS = { approve: 'approve', aprobar: 'approve', comment: 'comment', comentar: 'comment', reject: 'reject', rechazar: 'reject', open: 'open', abrir: 'open' };
+export async function reviewDocuments(root, { t, ask, out, now = new Date(), open = openWithSystemViewer, order = null, announce = true, docs = null, heading = null }) {
+  const waiting = docs ?? waitingReviews(root).filter((d) => !order || (d.shownIn ?? d.order) === order);
   if (!waiting.length) return [];
   if (announce) out(t('review.waiting', { n: waiting.length }));
-  if (order) out(t('review.group', { order, n: waiting.length }));
+  if (heading) out(heading);
+  else if (order) out(t('review.group', { order, n: waiting.length }));
   const made = [];
   for (const d of waiting) {
     const { title, summary } = describe(root, d.path);
@@ -150,8 +198,11 @@ export async function reviewDocuments(root, { t, ask, out, now = new Date(), ope
     out(t('review.path', { path: d.path }));
     if (summary) out(t('review.summary', { summary }));
     for (;;) {
-      const answer = (await ask(t('review.choose'))).trim().toLowerCase();
-      if (!answer) { out(t('review.skipped')); break; }
+      const typed = (await ask(t('review.choose', { title, order: d.shownIn ?? d.order }))).trim();
+      if (!typed) { out(t('review.skipped')); break; }
+      const [first, ...restWords] = typed.split(/\s+/);
+      const answer = REVIEW_WORDS[first.toLowerCase()] ?? first.toLowerCase();
+      const inline = restWords.join(' ');
       if (answer === 'open') {
         // ORD-0024 part D: a readable page, written in a temporary folder (never in the repository).
         const page = writeReviewPage(readFileSync(join(root, d.path), 'utf8'), { name: d.path, title, meta: `${d.order} · ${d.path}` });
@@ -160,9 +211,10 @@ export async function reviewDocuments(root, { t, ask, out, now = new Date(), ope
       }
       if (!REVIEW_DECISIONS.includes(answer)) { out(t('review.invalid')); continue; }
       let note = '';
-      if (answer === 'comment') note = await ask(t('review.ask_note'));
-      if (answer === 'reject') note = await ask(t('review.ask_reason'));
+      if (answer === 'comment') note = inline || await ask(t('review.ask_note'));
+      if (answer === 'reject') note = inline || await ask(t('review.ask_reason'));
       if (NOTE_REQUIRED.has(answer) && !note.trim()) { out(t('review.note_required')); continue; }
+      if (answer === 'comment' && !usefulComment(note)) { out(t('review.comment_short', { min: COMMENT_MIN_LETTERS })); continue; }
       decideReview(root, d.path, { decision: answer, note, now });
       out(t(`review.done.${answer}`));
       made.push({ path: d.path, decision: answer, order: d.order });

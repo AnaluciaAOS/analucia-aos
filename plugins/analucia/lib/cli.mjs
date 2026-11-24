@@ -21,7 +21,7 @@ export const aosCommand = () => `node "${AOS_BIN}"`;
 // The aos subcommands (bin/aos.mjs), so prose like "run aos validate" can be turned into a command that exists.
 export const SUBCOMMANDS = ['backup', 'review', 'workflow', 'pause', 'resume-order', 'unblock', 'sign', 'metrics', 'adopt', 'eval', 'init', 'permissions',
   'role', 'ask', 'ceo', 'admit', 'cost', 'explain', 'validate', 'event', 'verify-log', 'derive', 'history', 'run', 'verify', 'close', 'halt',
-  'resume', 'check-writeback', 'hook', 'agents-md', 'check-roles', 'check-push', 'install-git-hooks', 'next', 'launchers', 'drafts', 'ids', 'docs', 'preflight', 'repair-log', 'status', 'decision', 'replaced', 'update', 'scratch', 'trailer', 'report', 'tracked'];
+  'resume', 'check-writeback', 'hook', 'agents-md', 'check-roles', 'check-push', 'install-git-hooks', 'next', 'launchers', 'drafts', 'ids', 'docs', 'preflight', 'repair-log', 'status', 'dispatch', 'decision', 'replaced', 'update', 'scratch', 'trailer', 'report', 'tracked'];
 const SUB = [...SUBCOMMANDS].sort((a, b) => b.length - a.length).join('|');
 const COMMAND_RE = new RegExp(`node plugins/analucia/bin/aos\\.mjs|\\{aos\\}|(?<![\\w/.-])aos (?=(?:${SUB})\\b)|plugins/analucia/(core|lib|docs|templates)/`, 'g');
 

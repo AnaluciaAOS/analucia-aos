@@ -12,13 +12,13 @@
 
 ## Qué cambia para ti
 
-<Qué verá, hará o pagará distinto el dueño después, en palabras simples. Sin jerga.>
+<Qué verás, harás o pagarás distinto después, en palabras simples. Sin jerga.>
 
 ## Opciones
 
 | Opción | Qué significa | Costo | Riesgo |
 |---|---|---|---|
-| **A (recomendada)** | <una línea> | <tiempo o dinero, con su fuente> | bajo / medio / alto |
+| **A (recomendada)** | <una línea> | <tiempo o dinero, con la fuente> | bajo / medio / alto |
 | B | <una línea> | <…> | <…> |
 | C (opcional) | <una línea> | <…> | <…> |
 
@@ -36,4 +36,4 @@ Una de estas: **aprobar** la opción recomendada · **elegir** otra opción · *
 
 ## Fuentes
 
-- <Cada dato de arriba, con su origen: un archivo, una página leída en una fecha, un evento del registro.>
+- <Cada dato de arriba, con el origen: un archivo, una página leída en una fecha, un evento del registro.>

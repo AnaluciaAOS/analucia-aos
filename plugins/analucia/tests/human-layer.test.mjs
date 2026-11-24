@@ -108,12 +108,12 @@ test('aos sign: documents first (in the owner language); approve, open then comm
   const text = lines.join('\n');
   assert.match(text, /2 documento\(s\) esperan tu revisión\./);
   assert.match(text, /Documento: Diseño de la tienda \(orden ORD-0001\)\n {2}archivo: docs\/design\.md\n {2}en breve: Una página con el catálogo y un carrito\./);
-  assert.match(asked[0], /Escribe approve, comment o reject/);
+  assert.match(asked[0], /Escribe APROBAR para aprobar Diseño de la tienda \(ORD-0001\), COMENTAR y tu nota para devolver ORD-0001 a trabajo, RECHAZAR para rechazarlo, o ABRIR para verlo/);
   assert.equal(opened.length, 1);
   // ORD-0024 part D: open shows a readable HTML page from the temp folder, never written into the repository.
   assert.ok(opened[0].endsWith('plan.html') && opened[0].startsWith(tmpdir()) && !opened[0].startsWith(root), opened[0]);
   assert.match(readFileSync(opened[0], 'utf8'), /<h1>Plan<\/h1>\n<p>Tres pasos\.<\/p>/);
-  assert.match(text, /Escribe approve, comment, reject u open\./, 'an invalid word is asked again');
+  assert.match(text, /Escribe APROBAR, COMENTAR, RECHAZAR o ABRIR\./, 'an invalid word is asked again');
   assert.deepEqual(r.reviewed.map((x) => [x.path, x.decision]), [['docs/design.md', 'approve'], ['docs/plan.md', 'comment']]);
   assert.equal(r.committed, true, 'the decisions are committed even when no order is closed');
   assert.match(git(root, 'log', '-1', '--format=%B').stdout, /^Sign-off: 2 review decision\(s\) \(owner, aos sign\)\n\nAnalucia-Order: ORD-0001/);

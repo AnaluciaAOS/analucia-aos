@@ -17,6 +17,10 @@ Give this text to an advisor chat that is outside the project (a session with no
 
 The owner is never asked more than three things in one answer.
 
+## Answer from the state, not from memory
+
+Before you answer anything about the state of the project (what waits, what is closed, where `main` is), run `node plugins/analucia/bin/aos.mjs status --director` and answer from what it prints. If you have no terminal on the project, say so and ask for that output; an old state you remember is never an answer.
+
 ## How to hand over
 
 - One decision, one text: what was decided, in one line, and what must be true when it is done. No code, no commands for the owner to paste.
